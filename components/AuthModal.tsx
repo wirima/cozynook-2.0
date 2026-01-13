@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, Mail, Lock, User as UserIcon, ArrowRight, Loader2 } from 'lucide-react';
+import { X, Mail, Lock, User as UserIcon, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { UserRole } from '../types';
 
@@ -15,6 +15,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initi
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   
   // Form States
   const [email, setEmail] = useState('');
@@ -135,13 +136,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initi
               <div className="relative">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-14 pr-6 py-4 bg-slate-50 border-slate-100 border-2 focus:border-nook-200 focus:bg-white rounded-[24px] text-sm text-slate-900 focus:outline-none transition-all placeholder:text-slate-300 font-medium"
+                  className="w-full pl-14 pr-14 py-4 bg-slate-50 border-slate-100 border-2 focus:border-nook-200 focus:bg-white rounded-[24px] text-sm text-slate-900 focus:outline-none transition-all placeholder:text-slate-300 font-medium"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-nook-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -166,6 +174,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, initi
               onClick={() => {
                 setMode(mode === 'login' ? 'signup' : 'login');
                 setError(null);
+                setShowPassword(false);
               }}
               className="text-sm text-slate-400 hover:text-nook-900 transition-colors"
             >

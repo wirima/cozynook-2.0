@@ -1,0 +1,119 @@
+-- THE COZY NOOK - SUPABASE DATABASE SCHEMA
+-- Copy and paste this into your Supabase SQL Editor
+
+-- 1. PROFILES TABLE
+-- Stores user-specific information linked to Supabase Auth
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  full_name TEXT,
+  email TEXT,
+  role TEXT DEFAULT 'guest' CHECK (role IN ('admin', 'guest', 'delegate')),
+  has_logged_in_before BOOLEAN DEFAULT FALSE,
+  is_suspended BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. LISTINGS TABLE
+-- Stores property and room details
+CREATE TABLE IF NOT EXISTS public.listings (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL, -- 'house', 'room', 'apartment', 'studio'
+  price NUMERIC NOT NULL,
+  description TEXT,
+  short_summary TEXT,
+  amenities JSONB DEFAULT '[]',
+  images JSONB DEFAULT '[]',
+  max_guests INTEGER DEFAULT 2,
+  bedrooms INTEGER DEFAULT 1,
+  bathrooms INTEGER DEFAULT 1,
+  address TEXT,
+  check_in_method TEXT,
+  check_in_time TEXT,
+  check_out_time TEXT,
+  cleaning_fee NUMERIC DEFAULT 0,
+  security_deposit NUMERIC DEFAULT 0,
+  min_stay INTEGER DEFAULT 1,
+  max_stay INTEGER DEFAULT 30,
+  house_rules JSONB DEFAULT '{}',
+  host_info JSONB DEFAULT '{}',
+  guest_experience JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. BOOKINGS TABLE
+-- Stores reservation records
+CREATE TABLE IF NOT EXISTS public.bookings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  listing_id TEXT REFERENCES public.listings(id) ON DELETE CASCADE,
+  check_in DATE NOT NULL,
+  check_out DATE NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
+  total_amount NUMERIC NOT NULL,
+  guest_count INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. SITE CONFIGURATION
+-- Stores global settings like the hero image URL
+CREATE TABLE IF NOT EXISTS public.site_config (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. ENABLE ROW LEVEL SECURITY (RLS)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_config ENABLE ROW LEVEL SECURITY;
+
+-- 6. RLS POLICIES
+
+-- Profiles Policies
+CREATE POLICY "Public profiles are viewable by everyone." ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can update own profile." ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+-- Listings Policies
+CREATE POLICY "Listings are viewable by everyone." ON public.listings FOR SELECT USING (true);
+CREATE POLICY "Admins can manage listings." ON public.listings FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- Bookings Policies
+CREATE POLICY "Users can view own bookings." ON public.bookings FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own bookings." ON public.bookings FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Admins can view all bookings." ON public.bookings FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- Site Config Policies
+CREATE POLICY "Config viewable by everyone." ON public.site_config FOR SELECT USING (true);
+CREATE POLICY "Admins manage config." ON public.site_config FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- 7. AUTOMATED PROFILE CREATION ON SIGNUP
+-- This function runs whenever a new user signs up via Supabase Auth
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, email, role)
+  VALUES (
+    new.id, 
+    new.raw_user_meta_data->>'full_name', 
+    new.email, 
+    'guest'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger the function
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+-- 8. INITIAL DATA (Optional)
+-- INSERT INTO public.site_config (key, value) VALUES ('hero_image_url', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070');

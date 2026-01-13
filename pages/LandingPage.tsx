@@ -96,17 +96,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
         </div>
         <div className="relative z-10 text-center px-4 max-w-4xl">
           <h1 className="text-4xl md:text-6xl font-serif mb-6 leading-tight animate-in fade-in slide-in-from-top-8 duration-1000 drop-shadow-lg">
-            Your Blantyre Home Base—Warm, Bright & Inviting
+            The Cozy Nook - Warm, Bright & Inviting
           </h1>
           <p className="text-xl md:text-2xl font-light mb-12 opacity-95 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-1000 delay-200 drop-shadow-md">
-            Discover bespoke hospitality in the heart of serenity. From intimate rooms to grand estates.
+            Experience bespoke hospitality at our serene estate
           </p>
 
           <div className="bg-white/10 backdrop-blur-2xl p-3 rounded-[32px] md:rounded-full shadow-2xl flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-3 max-w-4xl mx-auto border border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-            <div className="flex-1 px-8 py-4 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center space-x-4 w-full text-left group">
-              <Calendar className="text-white/60 group-hover:text-white transition" size={20} />
+            {/* Red Background Check In Container */}
+            <div className="flex-1 px-8 py-4 bg-brand-red/90 hover:bg-brand-red hover:scale-[1.02] transition-all rounded-full flex items-center space-x-4 w-full text-left group shadow-lg">
+              <Calendar className="text-white/80 group-hover:text-white transition" size={20} />
               <div className="flex-1">
-                <label className="block text-[9px] uppercase tracking-[0.2em] text-white/50 font-black mb-0.5">Check In</label>
+                <label className="block text-[9px] uppercase tracking-[0.2em] text-white/60 font-black mb-0.5">Check In</label>
                 <input 
                   type="date" 
                   className="w-full bg-transparent text-white focus:outline-none cursor-pointer text-sm font-bold [color-scheme:dark]"
@@ -115,10 +116,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                 />
               </div>
             </div>
-            <div className="flex-1 px-8 py-4 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center space-x-4 w-full text-left group">
-              <Calendar className="text-white/60 group-hover:text-white transition" size={20} />
+
+            {/* Red Background Check Out Container */}
+            <div className="flex-1 px-8 py-4 bg-brand-red/90 hover:bg-brand-red hover:scale-[1.02] transition-all rounded-full flex items-center space-x-4 w-full text-left group shadow-lg">
+              <Calendar className="text-white/80 group-hover:text-white transition" size={20} />
               <div className="flex-1">
-                <label className="block text-[9px] uppercase tracking-[0.2em] text-white/50 font-black mb-0.5">Check Out</label>
+                <label className="block text-[9px] uppercase tracking-[0.2em] text-white/60 font-black mb-0.5">Check Out</label>
                 <input 
                   type="date" 
                   className="w-full bg-transparent text-white focus:outline-none cursor-pointer text-sm font-bold [color-scheme:dark]"
@@ -127,6 +130,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                 />
               </div>
             </div>
+
             <div className="w-full md:w-auto">
               <button 
                 disabled={isChecking}
