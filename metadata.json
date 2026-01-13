@@ -1,0 +1,5 @@
+{
+  "name": "The Cozy Nook",
+  "description": "A luxury hospitality booking application featuring a smart constraint-based booking system for an entire 4-bedroom house and individual luxury rooms, complete with an admin dashboard and guest portal.",
+  "requestFramePermissions": []
+}
