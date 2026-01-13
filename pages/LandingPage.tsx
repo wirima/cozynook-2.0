@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mockDatabase';
 import { Listing, User } from '../types';
-import { Shield, MapPin, Star, XCircle, Loader2 } from 'lucide-react';
+import { Shield, MapPin, Star, XCircle, Loader2, Calendar } from 'lucide-react';
 
 interface LandingPageProps {
   user: User | null;
@@ -11,21 +11,38 @@ interface LandingPageProps {
   onGuestPortal: () => void;
 }
 
+const DEFAULT_HERO = 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+
 const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGuestPortal }) => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, boolean>>({});
   const [isChecking, setIsChecking] = useState(false);
+  const [heroImageUrl, setHeroImageUrl] = useState<string>(DEFAULT_HERO);
   const [dates, setDates] = useState({ 
     checkIn: new Date().toISOString().split('T')[0], 
     checkOut: new Date(Date.now() + 86400000).toISOString().split('T')[0] 
   });
 
   useEffect(() => {
-    db.getListings()
-      .then(setListings)
-      .catch(err => {
-        console.error("Listing fetch failed", err);
-      });
+    const init = async () => {
+      try {
+        // Fetch listings and hero image in parallel
+        const [fetchedListings, fetchedHero] = await Promise.all([
+          db.getListings(),
+          db.getHeroImage()
+        ]);
+        
+        setListings(fetchedListings);
+        
+        // Only override if we have a valid non-fallback result
+        if (fetchedHero) {
+          setHeroImageUrl(fetchedHero);
+        }
+      } catch (err) {
+        console.error("Landing page initialization failed:", err);
+      }
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -34,7 +51,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
       setIsChecking(true);
       const map: Record<string, boolean> = {};
       try {
-        // Parallelize availability checks for massive speed boost
         const checks = await Promise.all(
           listings.map(l => db.checkAvailability(l.id, dates.checkIn, dates.checkOut))
         );
@@ -43,7 +59,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
         });
         setAvailabilityMap(map);
       } catch (err) {
-        console.error("Availability check failed", err);
+        console.error("Availability check failed:", err);
       } finally {
         setIsChecking(false);
       }
@@ -72,43 +88,52 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
       <section className="relative h-screen flex items-center justify-center text-white pt-16">
         <div className="absolute inset-0">
           <img 
-            src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070" 
-            className="w-full h-full object-cover brightness-[0.4]"
-            alt="Luxury Property"
+            src={heroImageUrl} 
+            key={heroImageUrl} // Key ensures re-render if URL changes
+            className="w-full h-full object-cover brightness-[0.65]"
+            alt="Landing Hero"
           />
         </div>
         <div className="relative z-10 text-center px-4 max-w-4xl">
-          <h1 className="text-5xl md:text-7xl font-serif mb-6 leading-tight animate-in fade-in slide-in-from-top-8 duration-1000">Your Private Sanctuary of Calm</h1>
-          <p className="text-xl md:text-2xl font-light mb-12 opacity-90 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-1000 delay-200">
+          <h1 className="text-4xl md:text-6xl font-serif mb-6 leading-tight animate-in fade-in slide-in-from-top-8 duration-1000 drop-shadow-lg">
+            Your Blantyre Home Base—Warm, Bright & Inviting
+          </h1>
+          <p className="text-xl md:text-2xl font-light mb-12 opacity-95 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-1000 delay-200 drop-shadow-md">
             Discover bespoke hospitality in the heart of serenity. From intimate rooms to grand estates.
           </p>
 
-          <div className="bg-white p-2 rounded-2xl md:rounded-full shadow-2xl flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 max-w-3xl mx-auto overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-            <div className="flex-1 px-6 py-3 border-b md:border-b-0 md:border-r border-nook-100 w-full text-left">
-              <label className="block text-[10px] uppercase tracking-wider text-nook-500 font-bold mb-1">Check In</label>
-              <input 
-                type="date" 
-                className="w-full bg-transparent text-nook-900 focus:outline-none cursor-pointer text-sm font-bold"
-                value={dates.checkIn}
-                onChange={(e) => setDates(prev => ({ ...prev, checkIn: e.target.value }))}
-              />
+          <div className="bg-white/10 backdrop-blur-2xl p-3 rounded-[32px] md:rounded-full shadow-2xl flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-3 max-w-4xl mx-auto border border-white/20 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+            <div className="flex-1 px-8 py-4 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center space-x-4 w-full text-left group">
+              <Calendar className="text-white/60 group-hover:text-white transition" size={20} />
+              <div className="flex-1">
+                <label className="block text-[9px] uppercase tracking-[0.2em] text-white/50 font-black mb-0.5">Check In</label>
+                <input 
+                  type="date" 
+                  className="w-full bg-transparent text-white focus:outline-none cursor-pointer text-sm font-bold [color-scheme:dark]"
+                  value={dates.checkIn}
+                  onChange={(e) => setDates(prev => ({ ...prev, checkIn: e.target.value }))}
+                />
+              </div>
             </div>
-            <div className="flex-1 px-6 py-3 w-full text-left">
-              <label className="block text-[10px] uppercase tracking-wider text-nook-500 font-bold mb-1">Check Out</label>
-              <input 
-                type="date" 
-                className="w-full bg-transparent text-nook-900 focus:outline-none cursor-pointer text-sm font-bold"
-                value={dates.checkOut}
-                onChange={(e) => setDates(prev => ({ ...prev, checkOut: e.target.value }))}
-              />
+            <div className="flex-1 px-8 py-4 bg-white/10 hover:bg-white/20 transition-colors rounded-full flex items-center space-x-4 w-full text-left group">
+              <Calendar className="text-white/60 group-hover:text-white transition" size={20} />
+              <div className="flex-1">
+                <label className="block text-[9px] uppercase tracking-[0.2em] text-white/50 font-black mb-0.5">Check Out</label>
+                <input 
+                  type="date" 
+                  className="w-full bg-transparent text-white focus:outline-none cursor-pointer text-sm font-bold [color-scheme:dark]"
+                  value={dates.checkOut}
+                  onChange={(e) => setDates(prev => ({ ...prev, checkOut: e.target.value }))}
+                />
+              </div>
             </div>
-            <div className="px-4 py-2 w-full md:w-auto">
+            <div className="w-full md:w-auto">
               <button 
                 disabled={isChecking}
-                className="bg-nook-900 text-white w-full px-10 py-4 rounded-full font-bold hover:bg-nook-800 transition flex items-center justify-center space-x-2"
+                className="bg-white text-nook-900 w-full px-12 py-5 rounded-full font-black uppercase tracking-widest text-xs hover:bg-nook-50 transition flex items-center justify-center space-x-3 shadow-xl"
               >
-                {isChecking ? <Loader2 className="animate-spin" size={18} /> : null}
-                <span>{isChecking ? 'Checking...' : 'Update Stay'}</span>
+                {isChecking ? <Loader2 className="animate-spin" size={16} /> : null}
+                <span>{isChecking ? 'Checking...' : 'View Availability'}</span>
               </button>
             </div>
           </div>
@@ -120,7 +145,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-end mb-16">
             <div>
-              <h2 className="text-4xl font-serif text-nook-900 mb-2">Refined Accommodations</h2>
+              <h2 className="text-4xl font-serif text-nook-900 mb-2">Our Listings</h2>
               <p className="text-slate-500">Choose the perfect space for your journey.</p>
             </div>
           </div>

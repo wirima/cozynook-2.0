@@ -7,7 +7,7 @@ import {
   Plus, TrendingUp, CheckCircle2, XCircle, Trash2, 
   Camera, Save, X, Edit3, Image as ImageIcon,
   ChevronRight, ArrowUpRight, ShieldCheck, Zap,
-  MapPin, Clock, Home, Info, User as UserIcon, Star, Check, Globe, Shield, Plane, Coffee, AlertCircle
+  MapPin, Clock, Home, Info, User as UserIcon, Star, Check, Globe, Shield, Plane, Coffee, AlertCircle, Loader2
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
@@ -21,6 +21,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [occupancy, setOccupancy] = useState<{date: string, listingId: string}[]>([]);
+  const [heroImageUrl, setHeroImageUrl] = useState<string>('');
+  const [heroUploading, setHeroUploading] = useState(false);
   
   const [isEditingListing, setIsEditingListing] = useState<Listing | null>(null);
   const [isAddingListing, setIsAddingListing] = useState(false);
@@ -33,18 +35,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [l, b, o, u] = await Promise.all([
+      const [l, b, o, u, hero] = await Promise.all([
         db.getListings(),
         db.getBookings(),
         db.getOccupiedDates(),
-        db.getAllUsers()
+        db.getAllUsers(),
+        db.getHeroImage()
       ]);
       setListings(l);
       setBookings(b);
       setOccupancy(o);
       setUsers(u);
+      setHeroImageUrl(hero);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    setHeroUploading(true);
+    try {
+      const file = e.target.files[0];
+      const filePath = `hero/landing-hero-${Date.now()}`;
+      
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file);
+      if (uploadError) throw uploadError;
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage.from('listing-images').getPublicUrl(filePath);
+      
+      // Save to site_config
+      await db.updateHeroImage(publicUrl);
+      
+      // Update local state and UI
+      setHeroImageUrl(publicUrl);
+      alert("Landing page hero image updated successfully!");
+      refreshData();
+    } catch (err: any) {
+      console.error("Hero upload failed:", err);
+      alert("Hero upload failed: " + err.message);
+    } finally {
+      setHeroUploading(false);
     }
   };
 
@@ -92,7 +125,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar omitted for brevity, logic remains same */}
       <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm z-30">
         <div className="p-8">
           <div className="flex items-center space-x-2">
@@ -178,11 +211,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="p-3 bg-nook-50 text-nook-600 rounded-2xl"><ImageIcon size={20}/></div>
+                    <h3 className="text-lg font-bold text-slate-900">Landing Customization</h3>
+                  </div>
+                  <div className="flex-1 flex flex-col space-y-6">
+                    <div className="relative aspect-video rounded-3xl overflow-hidden bg-slate-100 border border-slate-100 group">
+                      <img src={heroImageUrl || 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070'} className="w-full h-full object-cover" alt="Current Hero" />
+                      {heroUploading && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center">
+                          <Loader2 className="animate-spin text-white" size={32} />
+                        </div>
+                      )}
+                    </div>
+                    <label className="w-full py-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center space-x-3 cursor-pointer hover:border-nook-600 hover:bg-nook-50 transition-all group">
+                      <Camera className="text-slate-400 group-hover:text-nook-600 transition" size={18} />
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest group-hover:text-nook-900">Change Hero Image</span>
+                      <input type="file" hidden accept="image/*" onChange={handleHeroUpload} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm flex flex-col">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><ShieldCheck size={20}/></div>
+                    <h3 className="text-lg font-bold text-slate-900">System Preferences</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="p-5 bg-slate-50 rounded-2xl flex items-center justify-between border border-slate-100">
+                      <div className="flex items-center space-x-3">
+                        <Zap size={16} className="text-nook-600" />
+                        <span className="text-sm font-bold text-slate-700">Fast Bookings</span>
+                      </div>
+                      <div className="w-10 h-5 bg-nook-900 rounded-full relative"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
+                    </div>
+                    <div className="p-5 bg-slate-50 rounded-2xl flex items-center justify-between border border-slate-100">
+                      <div className="flex items-center space-x-3">
+                        <CalendarCheck size={16} className="text-nook-600" />
+                        <span className="text-sm font-bold text-slate-700">Email Notifications</span>
+                      </div>
+                      <div className="w-10 h-5 bg-nook-900 rounded-full relative"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
                 <div className="flex justify-between items-center mb-10">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Listings</h3>
-                    <p className="text-sm text-slate-400">Real-time status across all properties</p>
+                    <h3 className="text-lg font-bold text-slate-900">Listings Status</h3>
+                    <p className="text-sm text-slate-400">Real-time occupancy across all properties</p>
                   </div>
                 </div>
                 <div className="overflow-x-auto rounded-3xl border border-slate-100">
@@ -391,6 +471,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   );
 };
 
+// ... ListingFormModal components and helpers remain unchanged ...
+
+function CheckboxItem({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) {
+  return (
+    <button type="button" onClick={() => onChange(!checked)} className="flex items-center space-x-4 group text-left">
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all border-2 ${checked ? 'bg-nook-900 border-nook-900 shadow-lg shadow-nook-900/20' : 'bg-white border-slate-200 group-hover:border-nook-300'}`}>
+        {checked && <Check size={20} className="text-white" />}
+      </div>
+      <span className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${checked ? 'text-nook-900' : 'text-slate-400'}`}>{label}</span>
+    </button>
+  );
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <div className="flex items-center space-x-4 border-l-4 border-nook-600 pl-6">
+      <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.4em]">{title}</h4>
+    </div>
+  );
+}
+
+function InputWrapper({ label, children }: { label: string, children?: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon: Icon, color }: any) {
+  return (
+    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-300">
+      <div className={`p-4 rounded-2xl shadow-sm self-start mb-6 ${color}`}><Icon size={24} /></div>
+      <div>
+        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest block mb-1">{label}</span>
+        <div className="text-3xl font-bold text-slate-900 tracking-tight">{value}</div>
+      </div>
+    </div>
+  );
+}
+
 function ListingFormModal({ listing, onClose, onSave }: { listing: Listing | null, onClose: () => void, onSave: (l: Listing) => Promise<void> }) {
   const [formTab, setFormTab] = useState<'basics' | 'pricing' | 'amenities' | 'host'>('basics');
   const [formData, setFormData] = useState<Listing>(listing || {
@@ -490,7 +612,6 @@ function ListingFormModal({ listing, onClose, onSave }: { listing: Listing | nul
             ))}
           </div>
           <div className="p-8 border-t border-slate-100">
-             {/* Redundant abort button removed as requested */}
           </div>
         </div>
 
@@ -656,46 +777,6 @@ function ListingFormModal({ listing, onClose, onSave }: { listing: Listing | nul
           font-weight: 500;
         }
       `}</style>
-    </div>
-  );
-}
-
-function CheckboxItem({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) {
-  return (
-    <button type="button" onClick={() => onChange(!checked)} className="flex items-center space-x-4 group text-left">
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all border-2 ${checked ? 'bg-nook-900 border-nook-900 shadow-lg shadow-nook-900/20' : 'bg-white border-slate-200 group-hover:border-nook-300'}`}>
-        {checked && <Check size={20} className="text-white" />}
-      </div>
-      <span className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${checked ? 'text-nook-900' : 'text-slate-400'}`}>{label}</span>
-    </button>
-  );
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <div className="flex items-center space-x-4 border-l-4 border-nook-600 pl-6">
-      <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.4em]">{title}</h4>
-    </div>
-  );
-}
-
-function InputWrapper({ label, children }: { label: string, children?: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function StatCard({ label, value, icon: Icon, color }: any) {
-  return (
-    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-300">
-      <div className={`p-4 rounded-2xl shadow-sm self-start mb-6 ${color}`}><Icon size={24} /></div>
-      <div>
-        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest block mb-1">{label}</span>
-        <div className="text-3xl font-bold text-slate-900 tracking-tight">{value}</div>
-      </div>
     </div>
   );
 }

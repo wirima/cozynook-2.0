@@ -4,6 +4,39 @@ import { THE_COZY_NOOK_CONSTRAINTS, INITIAL_LISTINGS } from '../constants';
 import { supabase } from './supabaseClient';
 
 class DatabaseService {
+  async getHeroImage(): Promise<string> {
+    try {
+      const { data, error } = await supabase
+        .from('site_config')
+        .select('value')
+        .eq('key', 'hero_image_url')
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error fetching hero image from site_config:", error.message);
+        return 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+      }
+      
+      return data?.value || 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+    } catch (err) {
+      return 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+    }
+  }
+
+  async updateHeroImage(url: string): Promise<void> {
+    const { error } = await supabase
+      .from('site_config')
+      .upsert(
+        { key: 'hero_image_url', value: url },
+        { onConflict: 'key' }
+      );
+    
+    if (error) {
+      console.error("Error updating hero image in site_config:", error.message);
+      throw error;
+    }
+  }
+
   async getListings(): Promise<Listing[]> {
     try {
       const { data, error } = await supabase
