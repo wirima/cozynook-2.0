@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/mockDatabase';
+import { db } from '../services/mainDatabase';
 import { User, Booking, Listing, BookingStatus, UserRole } from '../types';
 import { LogOut, Home, Calendar, Clock, CreditCard, User as UserIcon, Download, ShieldCheck } from 'lucide-react';
 import { calculateTier } from '../services/tierService';

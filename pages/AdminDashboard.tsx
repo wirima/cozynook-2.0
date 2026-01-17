@@ -1,15 +1,19 @@
-
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/mockDatabase';
+import { db } from '../services/mainDatabase';
 import { Listing, Booking, BookingStatus, User, UserRole, ListingType, ListingImage, HouseRules, HostInfo, GuestExperience } from '../types';
 import { 
   LayoutDashboard, BedDouble, CalendarCheck, Users, LogOut, 
-  Plus, TrendingUp, CheckCircle2, XCircle, Trash2, 
+  Plus, TrendingUp, CheckCircle2, Trash2, 
   Camera, Save, X, Edit3, Image as ImageIcon,
-  ChevronRight, ArrowUpRight, ShieldCheck, Zap,
-  MapPin, Clock, Home, Info, User as UserIcon, Star, Check, Globe, Shield, Plane, Coffee, AlertCircle, Loader2
+  ChevronRight, ShieldCheck, Zap,
+  Home, User as UserIcon, Star, Check, Database,
+  Settings, ListChecks, DollarSign, FileText, Sparkles, Layers, History, ShieldAlert, Info, Loader2,
+  Shield, Clock, Palette, Upload, Wand2, Monitor
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+import { GoogleGenAI } from "@google/genai";
+
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -20,13 +24,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [occupancy, setOccupancy] = useState<{date: string, listingId: string}[]>([]);
-  const [heroImageUrl, setHeroImageUrl] = useState<string>('');
-  const [heroUploading, setHeroUploading] = useState(false);
-  
-  const [isEditingListing, setIsEditingListing] = useState<Listing | null>(null);
-  const [isAddingListing, setIsAddingListing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [heroPath, setHeroPath] = useState('');
+  const [updatingHero, setUpdatingHero] = useState(false);
+
+  const [configTarget, setConfigTarget] = useState<Listing | 'new' | null>(null);
 
   useEffect(() => {
     refreshData();
@@ -35,85 +38,81 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [l, b, o, u, hero] = await Promise.all([
+      const [l, b, u, h] = await Promise.all([
         db.getListings(),
         db.getBookings(),
-        db.getOccupiedDates(),
         db.getAllUsers(),
         db.getHeroImage()
       ]);
       setListings(l);
       setBookings(b);
-      setOccupancy(o);
       setUsers(u);
-      setHeroImageUrl(hero);
+      setHeroPath(h);
+    } catch (err) {
+      console.error("Critical Production Sync Error:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleUpdateHero = async () => {
+    if (!heroPath.trim()) return;
+    setUpdatingHero(true);
+    try {
+      await db.updateHeroImage(heroPath.trim());
+      alert("Landing page Hero Image successfully synchronized.");
+    } catch (err: any) {
+      alert("Hero Update Failed: " + err.message);
+    } finally {
+      setUpdatingHero(false);
+    }
+  };
+
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
-    setHeroUploading(true);
+    setUpdatingHero(true);
     try {
       const file = e.target.files[0];
-      const filePath = `hero/landing-hero-${Date.now()}`;
-      
-      // Upload to storage
+      const ext = file.name.split('.').pop() || 'jpg';
+      const fileName = `hero_${Date.now()}.${ext}`;
+      const filePath = `site/branding/${fileName}`;
+
       const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file);
       if (uploadError) throw uploadError;
-      
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage.from('listing-images').getPublicUrl(filePath);
-      
-      // Save to site_config
-      await db.updateHeroImage(publicUrl);
-      
-      // Update local state and UI
-      setHeroImageUrl(publicUrl);
-      alert("Landing page hero image updated successfully!");
-      refreshData();
+
+      await db.updateHeroImage(filePath);
+      setHeroPath(db.resolveImageUrl(filePath));
     } catch (err: any) {
-      console.error("Hero upload failed:", err);
-      alert("Hero upload failed: " + err.message);
+      alert("Hero Image Deployment Failed: " + err.message);
     } finally {
-      setHeroUploading(false);
+      setUpdatingHero(false);
     }
   };
 
-  const handleRoleUpdate = async (uid: string, role: UserRole) => {
+  const handleSeed = async () => {
+    if (listings.length > 0 && !window.confirm("Production catalog contains data. Initialize standard Cozy Nook inventory anyway?")) return;
+    setIsSeeding(true);
     try {
-      await db.updateUserRole(uid, role);
+      await db.seedListings();
       await refreshData();
-    } catch (e) {
-      alert("Unauthorized or failed to update role.");
-    }
-  };
-
-  const handleSuspendToggle = async (user: User) => {
-    try {
-      await db.suspendUser(user.uid, !user.isSuspended);
-      await refreshData();
-    } catch (e) {
-      alert("Failed to update suspension status.");
-    }
-  };
-
-  const handleDeleteUser = async (uid: string) => {
-    if (window.confirm("Permanently delete this user's profile and data? This cannot be undone.")) {
-      try {
-        await db.deleteUser(uid);
-        await refreshData();
-      } catch (e) {
-        alert("Failed to delete user profile.");
-      }
+      alert("Inventory successfully deployed.");
+    } catch (err: any) {
+      alert("Seeding Protocol Failed: " + err.message);
+    } finally {
+      setIsSeeding(false);
     }
   };
 
   const handleDeleteListing = async (id: string) => {
-    if (window.confirm("Permanent Action: Are you sure you want to remove this property?")) {
+    if (!window.confirm("Permanently decommission this asset? This action is irreversible in the production environment.")) return;
+    setLoading(true);
+    try {
       await db.deleteListing(id);
       await refreshData();
+    } catch (err: any) {
+      alert(`Decommissioning Failed: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -124,188 +123,133 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
-      {/* Sidebar omitted for brevity, logic remains same */}
+    <div className="flex h-screen bg-[#F8FAFC] font-sans text-slate-900 overflow-hidden">
       <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm z-30">
-        <div className="p-8">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-nook-600 rounded-lg flex items-center justify-center text-white font-serif font-bold italic">C</div>
-            <h1 className="text-xl font-bold text-nook-900 font-serif">The Cozy Nook</h1>
+        <div className="p-8 text-center border-b border-slate-50 mb-4">
+          <div className="flex items-center justify-center space-x-3 mb-2">
+            <div className="w-10 h-10 bg-nook-900 rounded-[14px] flex items-center justify-center text-white font-serif font-bold italic shadow-xl shadow-nook-900/20 text-lg">C</div>
+            <h1 className="text-xl font-bold text-nook-900 font-serif tracking-tight">The Cozy Nook</h1>
           </div>
-          <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-widest bg-slate-50 inline-block px-2 py-1 rounded">Admin HQ</p>
+          <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full inline-block mt-2">Global Controller</div>
         </div>
         
-        <nav className="flex-1 px-4 space-y-1">
+        <nav className="flex-1 px-4 space-y-1 mt-4">
           {[
             { id: 'overview', icon: LayoutDashboard, label: 'Control Center' },
-            { id: 'listings', icon: BedDouble, label: 'Manage Units' },
-            { id: 'bookings', icon: CalendarCheck, label: 'Reservation Log' },
-            { id: 'guests', icon: Users, label: 'Access Control' },
+            { id: 'listings', icon: BedDouble, label: 'Property Assets' },
+            { id: 'bookings', icon: CalendarCheck, label: 'Reservations' },
+            { id: 'guests', icon: Users, label: 'User Registry' },
           ].map((item) => (
             <button 
               key={item.id}
               onClick={() => setActiveTab(item.id as any)}
-              className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-semibold transition-all group ${
+              className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold transition-all group ${
                 activeTab === item.id 
                   ? 'bg-nook-900 text-white shadow-xl shadow-nook-900/20' 
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-nook-900'
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-nook-900'
               }`}
             >
               <div className="flex items-center space-x-3">
                 <item.icon size={18} /> <span>{item.label}</span>
               </div>
-              {activeTab !== item.id && <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+              {activeTab !== item.id && <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />}
             </button>
           ))}
         </nav>
 
-        <div className="p-6">
-          <button onClick={onLogout} className="w-full flex items-center justify-center space-x-3 px-4 py-4 rounded-2xl text-sm font-bold text-brand-red border border-red-50 hover:bg-red-50 transition-colors">
-            <LogOut size={18} /> <span>Sign Out</span>
+        <div className="p-6 border-t border-slate-50">
+          <button onClick={onLogout} className="w-full flex items-center justify-center space-x-3 px-4 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-brand-red border border-red-50 hover:bg-red-50 transition-colors">
+            <LogOut size={16} /> <span>Terminate Access</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto relative">
-        <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200 px-10 py-5 flex justify-between items-center sticky top-0 z-20">
+      <main className="flex-1 overflow-y-auto relative bg-white">
+        <header className="bg-white/80 backdrop-blur-xl border-b border-slate-100 px-10 py-6 flex justify-between items-center sticky top-0 z-20">
           <div className="flex flex-col">
-            <h2 className="text-xl font-bold text-nook-900 capitalize tracking-tight">{activeTab.replace('-', ' ')}</h2>
-            <p className="text-xs text-slate-400 font-medium italic">Operational status: <span className="text-emerald-500 font-bold">Optimal</span></p>
+            <h2 className="text-2xl font-serif font-bold text-nook-900 capitalize tracking-tight">{activeTab}</h2>
+            <div className="flex items-center space-x-2 mt-1">
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Network: <span className="text-emerald-500">Encrypted Production</span></p>
+            </div>
           </div>
           <div className="flex items-center space-x-6">
-            {loading && (
-              <div className="flex items-center space-x-2 bg-nook-50 px-3 py-1.5 rounded-full">
-                <div className="w-1.5 h-1.5 bg-nook-600 rounded-full animate-ping"></div>
-                <span className="text-[10px] font-bold text-nook-600 uppercase tracking-widest">Syncing</span>
-              </div>
-            )}
-            <div className="flex items-center space-x-3 pl-6 border-l border-slate-100">
+            {loading && <div className="animate-spin text-nook-600"><Loader2 size={20} /></div>}
+            <div className="flex items-center space-x-4 pl-6 border-l border-slate-100">
               <div className="text-right">
-                <div className="text-sm font-bold text-slate-900 uppercase tracking-tight">System Admin</div>
-                <div className="text-[10px] text-nook-600 font-bold uppercase">Root Authority</div>
+                <div className="text-sm font-bold text-slate-900">Root Authority</div>
+                <div className="text-[9px] text-nook-600 font-black uppercase tracking-widest">Administrator</div>
               </div>
-              <div className="w-10 h-10 rounded-2xl bg-nook-900 flex items-center justify-center text-white font-bold text-sm shadow-inner shadow-black/10"><ShieldCheck size={20} /></div>
+              <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg"><ShieldCheck size={20} /></div>
             </div>
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto space-y-10 pb-20">
+        <div className="p-10 max-w-7xl mx-auto space-y-12 pb-24">
           {activeTab === 'overview' && (
-            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <StatCard label="Net Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={TrendingUp} color="bg-emerald-50 text-emerald-600" />
-                <StatCard label="Active Stays" value={stats.activeBookings} icon={CalendarCheck} color="bg-blue-50 text-blue-600" />
-                <StatCard label="Registered" value={stats.totalGuests} icon={Users} color="bg-violet-50 text-violet-600" />
-                
+                <StatCard label="Live Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={TrendingUp} color="bg-emerald-50 text-emerald-600" />
+                <StatCard label="Confirmed Stays" value={stats.activeBookings} icon={CalendarCheck} color="bg-blue-50 text-blue-600" />
+                <StatCard label="Verified Accounts" value={stats.totalGuests} icon={Users} color="bg-violet-50 text-violet-600" />
                 <div 
-                  onClick={() => setIsAddingListing(true)}
-                  className="bg-nook-900 p-8 rounded-[40px] flex flex-col justify-between cursor-pointer hover:bg-nook-800 transition-all shadow-xl shadow-nook-900/20 group"
+                  onClick={() => setConfigTarget('new')} 
+                  className="bg-nook-900 p-8 rounded-[40px] flex flex-col justify-between cursor-pointer hover:bg-nook-800 transition-all shadow-2xl shadow-nook-900/30 group"
                 >
-                  <div className="bg-white/10 p-4 rounded-2xl self-start group-hover:scale-110 transition duration-300">
-                    <Plus className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest block mb-1">Administrative</span>
-                    <h3 className="text-white font-bold text-lg">Add New Listing</h3>
-                  </div>
+                  <div className="bg-white/10 p-4 rounded-2xl self-start group-hover:scale-110 transition duration-500"><Plus className="text-white" size={24} /></div>
+                  <h3 className="text-white font-bold text-lg tracking-tight">Deploy New Unit</h3>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="flex items-center space-x-4 mb-6">
-                    <div className="p-3 bg-nook-50 text-nook-600 rounded-2xl"><ImageIcon size={20}/></div>
-                    <h3 className="text-lg font-bold text-slate-900">Landing Customization</h3>
-                  </div>
-                  <div className="flex-1 flex flex-col space-y-6">
-                    <div className="relative aspect-video rounded-3xl overflow-hidden bg-slate-100 border border-slate-100 group">
-                      <img src={heroImageUrl || 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070'} className="w-full h-full object-cover" alt="Current Hero" />
-                      {heroUploading && (
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center">
-                          <Loader2 className="animate-spin text-white" size={32} />
-                        </div>
-                      )}
-                    </div>
-                    <label className="w-full py-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center space-x-3 cursor-pointer hover:border-nook-600 hover:bg-nook-50 transition-all group">
-                      <Camera className="text-slate-400 group-hover:text-nook-600 transition" size={18} />
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest group-hover:text-nook-900">Change Hero Image</span>
-                      <input type="file" hidden accept="image/*" onChange={handleHeroUpload} />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm flex flex-col">
-                  <div className="flex items-center space-x-4 mb-6">
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><ShieldCheck size={20}/></div>
-                    <h3 className="text-lg font-bold text-slate-900">System Preferences</h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex flex-col space-y-8">
+                  <div className="flex items-center space-x-4">
+                    <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><Palette size={24} /></div>
+                    <h3 className="text-xl font-bold text-slate-900 font-serif">Sanctuary Branding</h3>
                   </div>
                   <div className="space-y-4">
-                    <div className="p-5 bg-slate-50 rounded-2xl flex items-center justify-between border border-slate-100">
-                      <div className="flex items-center space-x-3">
-                        <Zap size={16} className="text-nook-600" />
-                        <span className="text-sm font-bold text-slate-700">Fast Bookings</span>
-                      </div>
-                      <div className="w-10 h-5 bg-nook-900 rounded-full relative"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Main Hero Path or URL</label>
+                    <div className="flex space-x-3">
+                      <input 
+                        type="text" 
+                        value={heroPath} 
+                        onChange={(e) => setHeroPath(e.target.value)}
+                        placeholder="site/branding/hero.jpg"
+                        className="flex-1 px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[20px] outline-none text-sm font-medium transition-all"
+                      />
+                      <button 
+                        onClick={handleUpdateHero}
+                        disabled={updatingHero}
+                        className="px-6 py-4 bg-nook-900 text-white rounded-[20px] font-bold text-xs uppercase tracking-widest hover:bg-nook-800 transition-all shadow-lg disabled:opacity-50"
+                      >
+                        {updatingHero ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                      </button>
                     </div>
-                    <div className="p-5 bg-slate-50 rounded-2xl flex items-center justify-between border border-slate-100">
-                      <div className="flex items-center space-x-3">
-                        <CalendarCheck size={16} className="text-nook-600" />
-                        <span className="text-sm font-bold text-slate-700">Email Notifications</span>
-                      </div>
-                      <div className="w-10 h-5 bg-nook-900 rounded-full relative"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
+                    <div className="flex items-center justify-between pt-2">
+                       <label className="cursor-pointer flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition">
+                         <Upload size={14} />
+                         <span>Upload New Hero Asset</span>
+                         <input type="file" hidden accept="image/*" onChange={handleHeroUpload} />
+                       </label>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
-                <div className="flex justify-between items-center mb-10">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">Listings Status</h3>
-                    <p className="text-sm text-slate-400">Real-time occupancy across all properties</p>
+                <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex items-center justify-between group">
+                  <div className="flex items-center space-x-8">
+                    <div className="p-6 bg-slate-50 text-nook-600 rounded-[32px] group-hover:bg-nook-50 transition-colors"><Database size={32}/></div>
+                    <div>
+                      <h3 className="text-xl font-serif font-bold text-slate-900 mb-1">Production Inventory Seed</h3>
+                      <p className="text-[11px] text-slate-400 font-medium">Reset the live catalog with standard Malawian hospitality assets.</p>
+                    </div>
                   </div>
-                </div>
-                <div className="overflow-x-auto rounded-3xl border border-slate-100">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-slate-50">
-                        <th className="p-6 text-left text-slate-500 font-bold uppercase tracking-widest">Unit Reference</th>
-                        {[0,1,2,3,4,5,6].map(i => {
-                          const date = new Date();
-                          date.setDate(date.getDate() + i);
-                          return (
-                            <th key={i} className="p-6 text-center text-slate-500 font-bold min-w-[120px]">
-                              {date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {listings.map(l => (
-                        <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-6 font-bold text-slate-900">{l.name}</td>
-                          {[0,1,2,3,4,5,6].map(i => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + i);
-                            const dayStr = date.toISOString().split('T')[0];
-                            const isBooked = occupancy.some(o => o.date === dayStr && o.listingId === l.id);
-                            return (
-                              <td key={i} className="p-6 text-center">
-                                <div className={`inline-flex items-center justify-center w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${
-                                  isBooked 
-                                    ? 'bg-red-50 text-brand-red border border-red-100' 
-                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                }`}>
-                                  {isBooked ? 'Occupied' : 'Vacant'}
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <button 
+                    disabled={isSeeding} 
+                    onClick={handleSeed} 
+                    className="px-8 py-5 bg-white border-2 border-slate-100 text-nook-900 font-black uppercase tracking-widest text-[10px] rounded-[24px] hover:border-nook-600 hover:text-nook-600 transition flex items-center space-x-3 shadow-sm"
+                  >
+                    {isSeeding ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  </button>
                 </div>
               </div>
             </div>
@@ -313,157 +257,81 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
           {activeTab === 'listings' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="flex justify-between items-end bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
+              <div className="flex justify-between items-end bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
                 <div>
-                  <h3 className="text-3xl font-serif text-slate-900">Portfolio Catalog</h3>
-                  <p className="text-sm text-slate-400 mt-2">Design and deploy your luxury units for the public market.</p>
+                  <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight">Deployment Console</h3>
+                  <p className="text-sm text-slate-400 font-medium mt-1">Status and management of all property units.</p>
                 </div>
                 <button 
-                  onClick={() => setIsAddingListing(true)}
-                  className="flex items-center space-x-3 bg-nook-900 text-white px-8 py-4 rounded-2xl text-sm font-bold hover:bg-nook-800 transition shadow-2xl shadow-nook-900/30"
+                  onClick={() => setConfigTarget('new')} 
+                  className="flex items-center space-x-3 bg-slate-900 text-white px-10 py-5 rounded-[24px] text-[11px] font-black uppercase tracking-widest hover:bg-black transition shadow-2xl shadow-slate-900/20"
                 >
-                  <Plus size={20} /> <span>Create New Record</span>
+                  <Plus size={18} /> <span>New Unit Configuration</span>
                 </button>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {listings.map(listing => (
-                  <div key={listing.id} className="bg-white rounded-[40px] border border-slate-200 overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group">
-                    <div className="h-64 bg-slate-100 relative overflow-hidden">
-                      <img 
-                        src={listing.images[0]?.url || 'https://picsum.photos/seed/nook/800/600'} 
-                        alt="" 
-                        className="w-full h-full object-cover group-hover:scale-110 transition duration-1000" 
-                      />
-                      <div className="absolute top-6 right-6 bg-white/95 backdrop-blur-xl px-4 py-2 rounded-2xl text-xs font-bold text-nook-900 shadow-sm border border-slate-100">
-                        ${listing.price}<span className="text-[10px] text-slate-400 ml-1">/ NT</span>
-                      </div>
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-8">
-                        <div className="flex space-x-3">
-                          <button 
-                            onClick={() => setIsEditingListing(listing)} 
-                            className="bg-white text-nook-900 p-4 rounded-2xl hover:bg-nook-50 transition shadow-xl"
-                          >
-                            <Edit3 size={18} />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteListing(listing.id)} 
-                            className="bg-brand-red text-white p-4 rounded-2xl hover:bg-red-700 transition shadow-xl"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-8">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-bold text-nook-600 uppercase tracking-widest bg-nook-50 px-3 py-1 rounded-lg">{listing.type}</span>
-                        <div className="flex items-center space-x-1 text-slate-300">
-                          <ImageIcon size={14} />
-                          <span className="text-[10px] font-bold">{listing.images.length}</span>
-                        </div>
-                      </div>
-                      <h4 className="text-xl font-bold text-slate-900 mb-2">{listing.name}</h4>
-                      <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed">{listing.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'guests' && (
-            <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-900">Guest Access Control</h3>
-                  <p className="text-xs text-slate-400 mt-1">Manage platform authorization and account standing.</p>
+              {listings.length === 0 ? (
+                <div className="bg-white p-24 rounded-[50px] border-2 border-dashed border-slate-100 text-center flex flex-col items-center">
+                  <Layers size={56} className="text-slate-100 mb-6" />
+                  <p className="text-slate-400 font-medium italic mb-8">No property assets detected in the live catalog.</p>
+                  <button onClick={handleSeed} className="bg-nook-900 text-white px-10 py-4 rounded-2xl font-bold shadow-xl">Initialize Deployment</button>
                 </div>
-              </div>
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th className="px-10 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400">User Identity</th>
-                    <th className="px-10 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400">Platform Role</th>
-                    <th className="px-10 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Administrative Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {users.map((u) => (
-                    <tr key={u.uid} className={`hover:bg-slate-50/50 transition-colors ${u.isSuspended ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                      <td className="px-10 py-7">
-                        <div className="flex items-center space-x-5">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg border uppercase ${
-                            u.isSuspended ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-nook-50 text-nook-700 border-nook-100'
-                          }`}>
-                            {u.fullName.charAt(0)}
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+                  {listings.map(listing => {
+                    const activeThumb = (listing.images && listing.images.length > 0 && listing.images[0].url)
+                      ? listing.images[0].url
+                      : FALLBACK_IMAGE;
+
+                    return (
+                      <div key={listing.id} className="bg-white rounded-[44px] border border-slate-100 overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 group hover:-translate-y-2">
+                        <div className="h-72 bg-slate-50 relative overflow-hidden cursor-pointer" onClick={() => setConfigTarget(listing)}>
+                          <img 
+                            src={activeThumb} 
+                            className="w-full h-full object-cover group-hover:scale-110 transition duration-[1500ms]" 
+                            alt={listing.name}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
+                            }}
+                          />
+                          <div className="absolute top-6 left-6 bg-white/95 backdrop-blur-xl px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest text-nook-900 shadow-sm border border-slate-100">
+                            Production Unit
                           </div>
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-bold text-slate-900 text-base">{u.fullName}</span>
-                              {u.isSuspended && (
-                                <span className="bg-brand-red text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center space-x-1">
-                                  <AlertCircle size={8} /> <span>Suspended</span>
-                                </span>
-                              )}
+                          <div className="absolute top-6 right-6 bg-slate-900/90 backdrop-blur-md px-5 py-2.5 rounded-2xl text-[12px] font-bold text-emerald-400 shadow-xl border border-white/10">
+                            ${listing.price}<span className="text-[10px] text-white/40 ml-1 font-medium">/ NT</span>
+                          </div>
+                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center space-x-4 backdrop-blur-sm">
+                            <button onClick={(e) => { e.stopPropagation(); setConfigTarget(listing); }} className="bg-white text-slate-900 p-5 rounded-[24px] hover:scale-110 transition shadow-2xl"><Edit3 size={20} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteListing(listing.id); }} className="bg-brand-red text-white p-5 rounded-[24px] hover:scale-110 transition shadow-2xl"><Trash2 size={20} /></button>
+                          </div>
+                        </div>
+                        <div className="p-10 cursor-pointer" onClick={() => setConfigTarget(listing)}>
+                          <div className="flex justify-between items-center mb-5">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nook-600 bg-nook-50 px-4 py-1.5 rounded-xl border border-nook-100">{listing.type}</span>
+                            <div className="flex items-center space-x-2 text-slate-300 font-bold text-[10px] uppercase tracking-widest">
+                              <ImageIcon size={14} /> <span>{(listing.images || []).length} Assets</span>
                             </div>
-                            <div className="text-xs text-slate-400 font-medium">{u.email}</div>
                           </div>
+                          <h4 className="text-2xl font-serif font-bold text-slate-900 mb-3 tracking-tight">{listing.name}</h4>
+                          <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed font-medium">{listing.description}</p>
                         </div>
-                      </td>
-                      <td className="px-10 py-7">
-                        <select 
-                          value={u.role}
-                          onChange={(e) => handleRoleUpdate(u.uid, e.target.value as UserRole)}
-                          className={`text-xs border rounded-2xl px-5 py-3 outline-none font-bold shadow-sm transition-all ${
-                            u.role === UserRole.ADMIN ? 'bg-nook-900 text-white border-nook-900' : 'bg-white text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          <option value={UserRole.GUEST}>Guest</option>
-                          <option value={UserRole.DELEGATE}>Delegate</option>
-                          <option value={UserRole.ADMIN}>Admin</option>
-                        </select>
-                      </td>
-                      <td className="px-10 py-7 text-right">
-                        <div className="flex items-center justify-end space-x-3">
-                          <button 
-                            onClick={() => handleSuspendToggle(u)}
-                            className={`p-3 rounded-xl transition-all border ${
-                              u.isSuspended 
-                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' 
-                                : 'bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-100'
-                            }`}
-                            title={u.isSuspended ? "Unsuspend User" : "Suspend User"}
-                          >
-                            {u.isSuspended ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteUser(u.uid)}
-                            className="p-3 bg-red-50 text-brand-red rounded-xl border border-red-100 hover:bg-red-100 transition-all"
-                            title="Delete User"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
       </main>
 
-      {(isEditingListing || isAddingListing) && (
-        <ListingFormModal 
-          listing={isEditingListing} 
-          onClose={() => { setIsEditingListing(null); setIsAddingListing(false); }} 
-          onSave={async (l) => {
-            await db.saveListing(l);
+      {configTarget && (
+        <AssetConfigModule 
+          target={configTarget === 'new' ? null : configTarget}
+          onClose={() => setConfigTarget(null)}
+          onComplete={async () => {
             await refreshData();
-            setIsEditingListing(null);
-            setIsAddingListing(false);
+            setConfigTarget(null);
           }}
         />
       )}
@@ -471,313 +339,538 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   );
 };
 
-// ... ListingFormModal components and helpers remain unchanged ...
-
-function CheckboxItem({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) {
-  return (
-    <button type="button" onClick={() => onChange(!checked)} className="flex items-center space-x-4 group text-left">
-      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all border-2 ${checked ? 'bg-nook-900 border-nook-900 shadow-lg shadow-nook-900/20' : 'bg-white border-slate-200 group-hover:border-nook-300'}`}>
-        {checked && <Check size={20} className="text-white" />}
-      </div>
-      <span className={`text-[11px] font-bold uppercase tracking-wider transition-colors ${checked ? 'text-nook-900' : 'text-slate-400'}`}>{label}</span>
-    </button>
-  );
+interface AssetConfigModuleProps {
+  target: Listing | null;
+  onClose: () => void;
+  onComplete: () => Promise<void>;
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <div className="flex items-center space-x-4 border-l-4 border-nook-600 pl-6">
-      <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.4em]">{title}</h4>
-    </div>
-  );
-}
+const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, onComplete }) => {
+  const [activeTab, setActiveTab] = useState<'identity' | 'media' | 'commercials' | 'operations' | 'host'>('identity');
+  const [isSaving, setIsSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
 
-function InputWrapper({ label, children }: { label: string, children?: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function StatCard({ label, value, icon: Icon, color }: any) {
-  return (
-    <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-300">
-      <div className={`p-4 rounded-2xl shadow-sm self-start mb-6 ${color}`}><Icon size={24} /></div>
-      <div>
-        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest block mb-1">{label}</span>
-        <div className="text-3xl font-bold text-slate-900 tracking-tight">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function ListingFormModal({ listing, onClose, onSave }: { listing: Listing | null, onClose: () => void, onSave: (l: Listing) => Promise<void> }) {
-  const [formTab, setFormTab] = useState<'basics' | 'pricing' | 'amenities' | 'host'>('basics');
-  const [formData, setFormData] = useState<Listing>(listing || {
-    id: `listing_${Date.now()}`,
+  const [draft, setDraft] = useState<Listing>(target || {
+    id: `unit_${Date.now()}`,
     name: '',
     type: ListingType.ROOM,
     price: 150,
     description: '',
     shortSummary: '',
-    amenities: [],
+    amenities: ['Solar Power', 'Pure Borehole Water', 'Backup Security', 'Satellite TV'],
     images: [],
     maxGuests: 2,
     bedrooms: 1,
     bathrooms: 1,
-    address: '',
-    checkInMethod: 'Self check-in with lockbox',
-    checkInTime: '15:00',
-    checkOutTime: '11:00',
-    cleaningFee: 0,
-    securityDeposit: 0,
+    address: 'Green Corner, Blantyre, Malawi',
+    checkInMethod: 'Concierge Greeting',
+    checkInTime: '14:00',
+    checkOutTime: '10:00',
+    cleaningFee: 35,
+    securityDeposit: 100,
     minStay: 1,
     maxStay: 28,
     houseRules: {
       smokingAllowed: false,
       petsAllowed: false,
       eventsAllowed: false,
-      quietHoursStart: '22:00',
-      quietHoursEnd: '08:00',
-      additionalNotes: ''
+      quietHoursStart: '21:00',
+      quietHoursEnd: '07:00',
+      additionalNotes: 'Welcome to our peaceful sanctuary. Please respect our eco-friendly protocols.'
     },
     hostInfo: {
-      displayName: 'Cozy Host',
+      displayName: 'Cozy Nook Operations',
       avatarUrl: '',
-      responseTime: 'Within an hour',
-      languages: ['English'],
+      responseTime: 'Instant Response',
+      languages: ['English', 'Chichewa'],
       verified: true
     },
     guestExperience: {
-      welcomeGuide: '',
-      localTips: '',
-      airportPickupAvailable: false,
-      earlyCheckInAvailable: false
+      welcomeGuide: 'Thank you for choosing The Cozy Nook. Your stay supports our local Green Initiatives.',
+      localTips: 'The best fresh morning tea is served in the local square at sunrise.',
+      airportPickupAvailable: true,
+      earlyCheckInAvailable: true
     }
   });
 
-  const [uploading, setUploading] = useState(false);
-  const [newAmenity, setNewAmenity] = useState('');
+  const handleAiRefineText = async (field: 'shortSummary' | 'description') => {
+    if (!draft.name) {
+      alert("Provide a Unit Name first to help the AI contextualize.");
+      return;
+    }
+    setIsAiGenerating(true);
+    try {
+      // Fix: Always use named parameter for apiKey and use it directly from process.env.API_KEY
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `Act as a luxury hospitality copywriter. Generate a compelling, high-end ${field === 'shortSummary' ? 'one-sentence summary' : 'multiline description'} for a property named "${draft.name}" which is a "${draft.type}". Focus on elegance, comfort, and the Malawian sanctuary vibe. Keep it professional.`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      
+      const refinedText = response.text?.trim() || "";
+      if (refinedText) {
+        setDraft(prev => ({ ...prev, [field]: refinedText }));
+      }
+    } catch (err: any) {
+      alert("AI Copywriting Failed: " + err.message);
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAiGenerateImage = async () => {
+    if (!draft.name) {
+      alert("Identify the unit first (name) to generate a relevant photo.");
+      return;
+    }
+    setIsAiGenerating(true);
+    try {
+      // Fix: Always use named parameter for apiKey and use it directly from process.env.API_KEY
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `A professional, ultra-luxury high-resolution architectural photograph of a "${draft.name}" which is a ${draft.type} at an upscale Malawian resort. Cinematic lighting, minimalist modern interior with high-quality wood and stone materials. 4k, photorealistic, elegant.`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [{ text: prompt }] },
+      });
+
+      let base64Data = "";
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          base64Data = part.inlineData.data;
+          break;
+        }
+      }
+
+      if (!base64Data) throw new Error("No image data returned from AI");
+
+      // Convert base64 to Blob for Supabase upload
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/png' });
+      const file = new File([blob], `ai_${Date.now()}.png`, { type: 'image/png' });
+
+      // Upload to storage
+      const safeDir = draft.id.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const fileName = `ai-asset-${Math.random().toString(36).substring(7)}.png`;
+      const filePath = `${safeDir}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const newAsset: ListingImage = {
+        path: filePath,
+        url: db.resolveImageUrl(filePath),
+        caption: `AI Generated Concept for ${draft.name}`,
+        isAiGenerated: true
+      };
+
+      // AI images are appended to the end, ensuring manual ones stay at the front
+      setDraft(prev => ({
+        ...prev,
+        images: [...(prev.images || []), newAsset]
+      }));
+    } catch (err: any) {
+      alert("AI Image Generation Failed: " + err.message);
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
     setUploading(true);
     try {
       const files = Array.from(e.target.files) as File[];
-      const newImages: ListingImage[] = [...formData.images];
+      const uploadedAssets: ListingImage[] = [];
+      const safeDir = draft.id.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
       for (const file of files) {
-        const filePath = `${formData.id}/${Math.random().toString(36).substring(7)}`;
-        const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file);
+        const ext = file.name.split('.').pop() || 'jpg';
+        const fileName = `asset-${Math.random().toString(36).substring(7)}.${ext}`;
+        const filePath = `${safeDir}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file, { 
+          contentType: file.type,
+          cacheControl: '3600'
+        });
         if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('listing-images').getPublicUrl(filePath);
-        newImages.push({ url: publicUrl, caption: 'Interior view' });
+
+        uploadedAssets.push({ 
+          path: filePath, 
+          url: db.resolveImageUrl(filePath), 
+          caption: '',
+          isAiGenerated: false
+        });
       }
-      setFormData({ ...formData, images: newImages });
+
+      setDraft(prev => {
+        // Manual uploads take precedence by being prepended to the array
+        const newImages = [...uploadedAssets, ...(prev.images || [])];
+        return { ...prev, images: newImages };
+      });
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      alert("Asset Deployment Error: " + err.message);
     } finally {
       setUploading(false);
     }
   };
 
-  const tabs = [
-    { id: 'basics', label: 'Basics & Location', icon: Home },
-    { id: 'pricing', label: 'Pricing & Rules', icon: Clock },
-    { id: 'amenities', label: 'Amenities & Media', icon: ImageIcon },
-    { id: 'host', label: 'Host & Experience', icon: UserIcon },
+  const handlePersist = async () => {
+    if (!draft.name || draft.name.length < 5) {
+      alert("Deployment Aborted: A professional unit name (min 5 chars) is required.");
+      setActiveTab('identity');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await db.saveListing(draft);
+      await onComplete();
+    } catch (err: any) {
+      alert("Database Synchronization Failure: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const menu = [
+    { id: 'identity', label: 'Unit Identity', icon: Home, desc: 'Naming & Specs' },
+    { id: 'media', label: 'Media Wall', icon: ImageIcon, desc: 'Visual Assets' },
+    { id: 'commercials', label: 'Commercials', icon: DollarSign, desc: 'Pricing & Tiers' },
+    { id: 'operations', label: 'Stay Protocols', icon: Shield, desc: 'Rules & Check-in' },
+    { id: 'host', label: 'Host Authority', icon: UserIcon, desc: 'Profile Management' },
   ];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 overflow-hidden">
-      <div className="bg-white w-full max-w-6xl rounded-[50px] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-500 flex h-[90vh]">
-        {/* Modal Sidebar */}
-        <div className="w-80 bg-slate-50 border-r border-slate-100 flex flex-col">
-          <div className="p-10 border-b border-slate-100">
-             <div className="text-xl font-serif font-bold text-nook-900 mb-2">{listing ? 'Edit Listing' : 'New Listing'}</div>
-             <p className="text-xs text-slate-400">Refine property specifications</p>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xl z-[100] flex items-center justify-center p-6 md:p-12 animate-in fade-in duration-500">
+      <div className="bg-white w-full max-w-7xl rounded-[60px] shadow-[0_60px_120px_-30px_rgba(0,0,0,0.4)] flex h-full max-h-[920px] overflow-hidden border border-white/20">
+        <aside className="w-80 bg-[#FBFBFE] border-r border-slate-100 flex flex-col p-12">
+          <div className="mb-14">
+            <div className="text-[10px] text-nook-600 font-black uppercase tracking-[0.3em] mb-3">System Module</div>
+            <h3 className="text-3xl font-serif text-slate-900 font-bold mb-1">{target ? 'Edit Asset' : 'New Unit'}</h3>
+            <div className="h-1.5 w-12 bg-nook-900 rounded-full mt-4"></div>
           </div>
-          <div className="flex-1 p-6 space-y-2">
-            {tabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setFormTab(t.id as any)}
-                className={`w-full flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold transition-all ${
-                  formTab === t.id ? 'bg-nook-900 text-white shadow-xl shadow-nook-900/20' : 'text-slate-400 hover:bg-white hover:text-nook-600'
+
+          <div className="flex-1 space-y-4">
+            {menu.map(item => (
+              <button 
+                key={item.id} 
+                onClick={() => setActiveTab(item.id as any)}
+                className={`w-full flex items-center space-x-5 p-5 rounded-[28px] transition-all text-left group ${
+                  activeTab === item.id 
+                    ? 'bg-nook-900 text-white shadow-2xl shadow-nook-900/20 translate-x-2' 
+                    : 'text-slate-400 hover:bg-white hover:text-nook-900 hover:shadow-sm'
                 }`}
               >
-                <t.icon size={18} /> <span>{t.label}</span>
+                <div className={`p-3 rounded-2xl transition-colors ${activeTab === item.id ? 'bg-white/10' : 'bg-slate-50 group-hover:bg-nook-50'}`}>
+                  <item.icon size={20} />
+                </div>
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider">{item.label}</div>
+                  <div className={`text-[10px] opacity-60 font-bold mt-0.5 ${activeTab === item.id ? 'text-white' : 'text-slate-400'}`}>{item.desc}</div>
+                </div>
               </button>
             ))}
           </div>
-          <div className="p-8 border-t border-slate-100">
-          </div>
-        </div>
 
-        {/* Modal Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="px-12 py-8 border-b border-slate-100 flex justify-between items-center bg-white">
-            <h3 className="text-2xl font-serif text-slate-900">{tabs.find(t => t.id === formTab)?.label}</h3>
-            <div className="flex items-center space-x-4">
-              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Progress</span>
-              <div className="w-40 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-nook-600 transition-all duration-700" style={{ width: `${(tabs.findIndex(t => t.id === formTab) + 1) * 25}%` }}></div>
-              </div>
+          <div className="mt-10 p-6 bg-slate-50 rounded-[32px] border border-slate-100 flex items-center space-x-4">
+            <div className="p-2.5 bg-white text-emerald-500 rounded-xl shadow-sm"><CheckCircle2 size={16} /></div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Draft Auto-Saved</div>
+          </div>
+        </aside>
+
+        <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+          <header className="px-14 py-12 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+            <div>
+              <h4 className="text-4xl font-serif text-slate-900 font-bold tracking-tight capitalize">{activeTab} Details</h4>
+              <p className="text-sm text-slate-400 font-medium mt-1">Configure unit parameters for live production cataloging.</p>
             </div>
+            <button 
+              onClick={onClose} 
+              className="w-14 h-14 bg-slate-50 text-slate-300 rounded-[20px] flex items-center justify-center hover:bg-red-50 hover:text-brand-red transition-all hover:rotate-90"
+            >
+              <X size={28} />
+            </button>
           </header>
 
-          <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="flex-1 overflow-y-auto p-12 space-y-12">
-            {formTab === 'basics' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <SectionTitle title="Listings" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <InputWrapper label="Listing Title (Publicly Displayed)">
-                    <input required className="input-nook" placeholder="e.g., Summit Luxury Sanctuary" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                  </InputWrapper>
-                  <InputWrapper label="Property Classification">
-                    <select className="input-nook" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as ListingType})}>
-                      <option value={ListingType.HOUSE}>Entire Estate (4-Bed)</option>
-                      <option value={ListingType.ROOM}>Private Luxury Room</option>
-                      <option value={ListingType.APARTMENT}>Luxury Apartment</option>
-                    </select>
-                  </InputWrapper>
+          <div className="flex-1 overflow-y-auto px-14 pb-14 space-y-16 custom-scrollbar">
+            {activeTab === 'identity' && (
+              <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <ContentSection icon={Sparkles} title="Global Positioning" />
+                <div className="grid md:grid-cols-2 gap-10">
+                  <InputGroup label="Unit Display Name" value={draft.name} onChange={v => setDraft({...draft, name: v})} placeholder="The Ivory Oasis Penthouse" />
+                  <InputGroup label="Asset Category" type="select" options={['house', 'room', 'apartment', 'studio']} value={draft.type} onChange={v => setDraft({...draft, type: v as ListingType})} />
                 </div>
-                <InputWrapper label="Executive Summary (Tagline)">
-                  <input required className="input-nook" placeholder="One sentence capturing the essence..." value={formData.shortSummary} onChange={e => setFormData({...formData, shortSummary: e.target.value})} />
-                </InputWrapper>
-                <div className="grid grid-cols-3 gap-6">
-                   <InputWrapper label="Bedrooms"><input type="number" className="input-nook" value={formData.bedrooms} onChange={e => setFormData({...formData, bedrooms: +e.target.value})} /></InputWrapper>
-                   <InputWrapper label="Bathrooms"><input type="number" className="input-nook" value={formData.bathrooms} onChange={e => setFormData({...formData, bathrooms: +e.target.value})} /></InputWrapper>
-                   <InputWrapper label="Max Guests"><input type="number" className="input-nook" value={formData.maxGuests} onChange={e => setFormData({...formData, maxGuests: +e.target.value})} /></InputWrapper>
-                </div>
-                <SectionTitle title="Address & Location" />
-                <InputWrapper label="Precise Physical Address">
-                  <div className="relative">
-                    <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                    <input required className="input-nook pl-16" placeholder="Enter full address for verification" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pr-3">
+                    <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">Marketing Summary</label>
+                    <button 
+                      onClick={() => handleAiRefineText('shortSummary')} 
+                      disabled={isAiGenerating}
+                      className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition disabled:opacity-50"
+                    >
+                      {isAiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                      <span>Refine with AI</span>
+                    </button>
                   </div>
-                </InputWrapper>
-              </div>
-            )}
-
-            {formTab === 'pricing' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <SectionTitle title="Rates" />
-                <div className="grid grid-cols-2 gap-8">
-                  <InputWrapper label="Base Nightly Rate ($)"><input type="number" required className="input-nook" value={formData.price} onChange={e => setFormData({...formData, price: +e.target.value})} /></InputWrapper>
-                  <InputWrapper label="Cleaning Fee ($)"><input type="number" className="input-nook" value={formData.cleaningFee} onChange={e => setFormData({...formData, cleaningFee: +e.target.value})} /></InputWrapper>
+                  <input className="w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all" value={draft.shortSummary} onChange={e => setDraft({...draft, shortSummary: e.target.value})} placeholder="A magnificent 4-bedroom escape..." />
                 </div>
-                <SectionTitle title="Stay Logistics" />
-                <div className="grid grid-cols-2 gap-8">
-                  <InputWrapper label="Check-in Method"><input className="input-nook" value={formData.checkInMethod} onChange={e => setFormData({...formData, checkInMethod: e.target.value})} /></InputWrapper>
-                  <div className="grid grid-cols-2 gap-4">
-                     <InputWrapper label="Check-in"><input type="time" className="input-nook" value={formData.checkInTime} onChange={e => setFormData({...formData, checkInTime: e.target.value})} /></InputWrapper>
-                     <InputWrapper label="Check-out"><input type="time" className="input-nook" value={formData.checkOutTime} onChange={e => setFormData({...formData, checkOutTime: e.target.value})} /></InputWrapper>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pr-3">
+                    <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">Extended Description</label>
+                    <button 
+                      onClick={() => handleAiRefineText('description')} 
+                      disabled={isAiGenerating}
+                      className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition disabled:opacity-50"
+                    >
+                      {isAiGenerating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                      <span>Compose with AI</span>
+                    </button>
                   </div>
+                  <textarea rows={5} className="w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all resize-none leading-relaxed" value={draft.description} onChange={e => setDraft({...draft, description: e.target.value})} placeholder="Detail the luxury elements..." />
                 </div>
-                <SectionTitle title="Protocol & Rules" />
-                <div className="bg-slate-50 p-8 rounded-[40px] grid md:grid-cols-3 gap-6 border border-slate-100">
-                  <CheckboxItem label="Smoking Allowed" checked={formData.houseRules.smokingAllowed} onChange={v => setFormData({...formData, houseRules: {...formData.houseRules, smokingAllowed: v}})} />
-                  <CheckboxItem label="Pets Allowed" checked={formData.houseRules.petsAllowed} onChange={v => setFormData({...formData, houseRules: {...formData.houseRules, petsAllowed: v}})} />
-                  <CheckboxItem label="Events Allowed" checked={formData.houseRules.eventsAllowed} onChange={v => setFormData({...formData, houseRules: {...formData.houseRules, eventsAllowed: v}})} />
+                
+                <ContentSection icon={Settings} title="Architecture Specs" />
+                <div className="grid grid-cols-4 gap-8">
+                  <InputGroup label="Bedrooms" type="number" value={draft.bedrooms} onChange={v => setDraft({...draft, bedrooms: Number(v)})} />
+                  <InputGroup label="Bathrooms" type="number" value={draft.bathrooms} onChange={v => setDraft({...draft, bathrooms: Number(v)})} />
+                  <InputGroup label="Max Guests" type="number" value={draft.maxGuests} onChange={v => setDraft({...draft, maxGuests: Number(v)})} />
+                  <InputGroup label="Min Stay" type="number" value={draft.minStay} onChange={v => setDraft({...draft, minStay: Number(v)})} />
                 </div>
-              </div>
-            )}
 
-            {formTab === 'amenities' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <SectionTitle title="Visual Assets" />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {formData.images.map((img, idx) => (
-                    <div key={idx} className="flex flex-col space-y-3 bg-slate-50 p-4 rounded-[32px] border border-slate-100 group">
-                      <div className="relative aspect-video rounded-2xl overflow-hidden shadow-sm">
-                        <img src={img.url} className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => setFormData({...formData, images: formData.images.filter((_, i) => i !== idx)})} className="absolute top-2 right-2 bg-white/90 p-2 rounded-xl text-brand-red opacity-0 group-hover:opacity-100 transition shadow-sm hover:bg-white"><Trash2 size={12} /></button>
-                      </div>
+                <ContentSection icon={ListChecks} title="Amenities & Features" />
+                <div className="bg-slate-50 p-8 rounded-[40px] border border-slate-100 space-y-6">
+                   {(!draft.amenities || draft.amenities.length === 0) && (
+                      <p className="text-sm text-slate-400 italic font-medium text-center py-4">No amenities listed yet. Add features like 'WiFi', 'Pool', etc.</p>
+                   )}
+                   <div className="flex flex-wrap gap-3">
+                      {(draft.amenities || []).map((amenity, i) => (
+                        <span key={i} className="pl-4 pr-2 py-2 bg-white rounded-xl text-xs font-bold text-nook-900 shadow-sm flex items-center space-x-2 border border-slate-100 group animate-in zoom-in duration-300">
+                          <span>{amenity}</span>
+                          <button 
+                            onClick={() => {
+                              const newAmenities = [...(draft.amenities || [])];
+                              newAmenities.splice(i, 1);
+                              setDraft({...draft, amenities: newAmenities});
+                            }} 
+                            className="p-1 rounded-full text-slate-300 hover:bg-red-50 hover:text-brand-red transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                   </div>
+                   <div className="flex items-center space-x-3">
                       <input 
-                        className="text-[10px] font-bold uppercase tracking-widest bg-white border border-slate-100 rounded-xl outline-none py-2 px-3 text-slate-700 focus:border-nook-600 transition"
-                        placeholder="Add a caption..."
-                        value={img.caption}
-                        onChange={(e) => {
-                          const newImages = [...formData.images];
-                          newImages[idx].caption = e.target.value;
-                          setFormData({...formData, images: newImages});
+                        type="text" 
+                        placeholder="Add a new feature (e.g. 'Ocean View')..." 
+                        className="flex-1 px-6 py-4 bg-white border-2 border-slate-100 focus:border-nook-600 rounded-[24px] outline-none text-sm font-bold text-nook-900 transition-all placeholder:text-slate-300"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const input = e.currentTarget;
+                            const val = input.value.trim();
+                            if (val && !(draft.amenities || []).includes(val)) {
+                              setDraft({...draft, amenities: [...(draft.amenities || []), val]});
+                              input.value = '';
+                            }
+                          }
+                        }}
+                        id="amenity-input"
+                      />
+                      <button 
+                        onClick={() => {
+                          const input = document.getElementById('amenity-input') as HTMLInputElement;
+                          const val = input.value.trim();
+                          if (val && !(draft.amenities || []).includes(val)) {
+                            setDraft({...draft, amenities: [...(draft.amenities || []), val]});
+                            input.value = '';
+                          }
+                        }}
+                        className="px-6 py-4 bg-nook-900 text-white rounded-[24px] font-bold text-xs uppercase tracking-widest hover:bg-nook-800 transition shadow-lg hover:shadow-xl active:scale-95"
+                      >
+                        <Plus size={18} />
+                      </button>
+                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'media' && (
+              <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <div className="flex justify-between items-center">
+                  <ContentSection icon={ImageIcon} title="Production Asset Gallery" />
+                  <button 
+                    onClick={handleAiGenerateImage}
+                    disabled={isAiGenerating}
+                    className="flex items-center space-x-3 bg-gradient-to-r from-nook-600 to-nook-900 text-white px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition shadow-xl shadow-nook-900/20 disabled:opacity-50"
+                  >
+                    {isAiGenerating ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                    <span>Magic AI Generator</span>
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                  {(draft.images || []).map((img, idx) => (
+                    <div key={`${idx}-${img.url}`} className={`group relative aspect-video rounded-[40px] overflow-hidden bg-slate-50 border-4 transition-all duration-500 ${idx === 0 ? 'border-nook-600 ring-[12px] ring-nook-50/50 shadow-2xl' : 'border-slate-50 hover:border-nook-200'}`}>
+                      <img 
+                        src={img.url || FALLBACK_IMAGE} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition duration-[1500ms]" 
+                        alt="" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
                         }}
                       />
+                      <div className="absolute top-5 left-5 flex flex-col space-y-2">
+                        {idx === 0 && <div className="bg-nook-900 text-white text-[9px] font-black uppercase tracking-[0.25em] px-4 py-2 rounded-full shadow-xl border border-white/20">Active Thumbnail</div>}
+                        <div className={`text-[8px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg border backdrop-blur-md flex items-center space-x-1.5 ${img.isAiGenerated ? 'bg-violet-600/90 text-white border-violet-400/30' : 'bg-emerald-600/90 text-white border-emerald-400/30'}`}>
+                          {img.isAiGenerated ? <Sparkles size={10} /> : <Monitor size={10} />}
+                          <span>{img.isAiGenerated ? 'AI Generated' : 'Manual Upload'}</span>
+                        </div>
+                      </div>
+
+                      <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center space-x-4 backdrop-blur-sm">
+                        {idx !== 0 && (
+                          <button onClick={() => {
+                            const reorder = [...(draft.images || [])];
+                            const [move] = reorder.splice(idx, 1);
+                            reorder.unshift(move); 
+                            setDraft(prev => ({...prev, images: reorder}));
+                          }} className="p-4 bg-white text-nook-900 rounded-[20px] hover:scale-110 transition shadow-2xl" title="Set as Primary Thumbnail">
+                            <Star size={20} className="fill-current text-nook-600" />
+                          </button>
+                        )}
+                        <button onClick={() => setDraft(prev => ({...prev, images: (prev.images || []).filter((_, i) => i !== idx)}))} className="p-4 bg-white text-brand-red rounded-[20px] hover:scale-110 transition shadow-2xl" title="Delete Asset">
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
                     </div>
                   ))}
-                  <label className="aspect-video border-2 border-dashed border-slate-200 rounded-[32px] flex flex-col items-center justify-center cursor-pointer hover:border-nook-600 transition bg-slate-50 group">
-                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition duration-300">
-                      <Camera className="text-slate-300 group-hover:text-nook-600 transition" size={20} />
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add Photo</span>
-                    <input type="file" hidden multiple onChange={handleImageUpload} />
+                  <label className={`aspect-video border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-nook-50 hover:border-nook-600 border-slate-200 group relative ${uploading ? 'opacity-50 cursor-wait bg-slate-50' : ''}`}>
+                    {uploading ? (
+                      <div className="flex flex-col items-center space-y-4">
+                        <Loader2 className="animate-spin text-nook-600" size={40} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-nook-600">Uploading to Storage...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-5 shadow-sm border border-slate-50 group-hover:scale-110 group-hover:shadow-xl transition-all duration-500">
+                          <Camera className="text-slate-200 group-hover:text-nook-600 transition" size={28} />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-300 group-hover:text-nook-900 text-center px-4 leading-relaxed font-bold">Deploy Persistent Assets</span>
+                      </>
+                    )}
+                    <input type="file" hidden multiple accept="image/*" onChange={handleMediaUpload} disabled={uploading} />
                   </label>
                 </div>
-                <SectionTitle title="Amenities" />
-                <div className="flex flex-wrap gap-2">
-                   {formData.amenities.map((a, i) => (
-                     <span key={i} className="px-4 py-2 bg-nook-50 text-nook-700 text-[10px] font-bold uppercase rounded-xl border border-nook-100 flex items-center">
-                       {a} <button type="button" onClick={() => setFormData({...formData, amenities: formData.amenities.filter((_, idx) => idx !== i)})} className="ml-2 hover:text-brand-red transition-colors"><X size={12} /></button>
-                     </span>
-                   ))}
-                </div>
-                <div className="flex space-x-3">
-                  <input className="flex-1 input-nook" placeholder="Add custom amenity (e.g., Infinity Pool)" value={newAmenity} onChange={e => setNewAmenity(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), setNewAmenity(''), setFormData({...formData, amenities: [...formData.amenities, newAmenity]}))} />
-                  <button type="button" onClick={() => (setNewAmenity(''), setFormData({...formData, amenities: [...formData.amenities, newAmenity]}))} className="bg-nook-900 text-white p-4 rounded-2xl shadow-lg shadow-nook-900/10"><Plus size={20} /></button>
+              </div>
+            )}
+
+            {activeTab === 'commercials' && (
+              <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <ContentSection icon={DollarSign} title="Commercial Strategy" />
+                <div className="grid md:grid-cols-2 gap-10">
+                  <InputGroup label="Base Nightly Rate (USD)" type="number" value={draft.price} onChange={v => setDraft({...draft, price: Number(v)})} />
+                  <InputGroup label="Mandatory Cleaning Fee" type="number" value={draft.cleaningFee} onChange={v => setDraft({...draft, cleaningFee: Number(v)})} />
                 </div>
               </div>
             )}
 
-            {formTab === 'host' && (
-              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <SectionTitle title="Identity & Trust" />
-                <div className="grid grid-cols-2 gap-8">
-                   <InputWrapper label="Host Display Name"><input className="input-nook" value={formData.hostInfo.displayName} onChange={e => setFormData({...formData, hostInfo: {...formData.hostInfo, displayName: e.target.value}})} /></InputWrapper>
-                   <InputWrapper label="Response Speed"><input className="input-nook" value={formData.hostInfo.responseTime} onChange={e => setFormData({...formData, hostInfo: {...formData.hostInfo, responseTime: e.target.value}})} /></InputWrapper>
-                </div>
-                <SectionTitle title="Guest Experience Nodes" />
-                <InputWrapper label="Welcome Guide (Shown after booking)"><textarea className="input-nook min-h-[120px]" value={formData.guestExperience.welcomeGuide} onChange={e => setFormData({...formData, guestExperience: {...formData.guestExperience, welcomeGuide: e.target.value}})} /></InputWrapper>
-                <div className="grid md:grid-cols-2 gap-6 pt-6">
-                   <CheckboxItem label="Airport Pickup Available" checked={formData.guestExperience.airportPickupAvailable} onChange={v => setFormData({...formData, guestExperience: {...formData.guestExperience, airportPickupAvailable: v}})} />
-                   <CheckboxItem label="Early Check-in Option" checked={formData.guestExperience.earlyCheckInAvailable} onChange={v => setFormData({...formData, guestExperience: {...formData.guestExperience, earlyCheckInAvailable: v}})} />
+            {activeTab === 'operations' && (
+              <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <ContentSection icon={ShieldAlert} title="Unit Guidelines" />
+                <div className="bg-[#FBFBFE] p-12 rounded-[50px] grid md:grid-cols-3 gap-10 border border-slate-100 shadow-sm">
+                   <OperationalToggle label="Smoking Protocol" checked={draft.houseRules.smokingAllowed} onChange={v => setDraft({...draft, houseRules: {...draft.houseRules, smokingAllowed: v}})} />
+                   <OperationalToggle label="Pet Policy" checked={draft.houseRules.petsAllowed} onChange={v => setDraft({...draft, houseRules: {...draft.houseRules, petsAllowed: v}})} />
+                   <OperationalToggle label="Event Authorization" checked={draft.houseRules.eventsAllowed} onChange={v => setDraft({...draft, houseRules: {...draft.houseRules, eventsAllowed: v}})} />
                 </div>
               </div>
             )}
-          </form>
 
-          <footer className="p-8 border-t border-slate-100 bg-slate-50/50 flex space-x-6">
-             <button type="button" onClick={onClose} className="flex-1 py-5 bg-white border border-slate-200 rounded-[30px] font-bold text-slate-400 hover:bg-slate-50 transition uppercase text-xs tracking-widest">Cancel</button>
-             <button type="button" onClick={() => onSave(formData)} className="flex-[2] py-5 bg-nook-900 text-white rounded-[30px] font-bold hover:bg-nook-800 transition shadow-2xl shadow-nook-900/30 uppercase text-xs tracking-widest flex items-center justify-center space-x-3">
-               <Zap size={18} /> <span>Create Listing</span>
-             </button>
+            {activeTab === 'host' && (
+              <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <ContentSection icon={UserIcon} title="Host Attribution" />
+                <InputGroup label="Sanctuary Welcome Guide" type="textarea" value={draft.guestExperience.welcomeGuide} onChange={v => setDraft({...draft, guestExperience: {...draft.guestExperience, welcomeGuide: v}})} placeholder="Compose a world-class welcome message..." />
+              </div>
+            )}
+          </div>
+
+          <footer className="p-12 border-t border-slate-50 bg-white/80 backdrop-blur-xl flex space-x-8 sticky bottom-0 z-20">
+            <button onClick={onClose} className="flex-1 py-6 bg-white border border-slate-200 text-slate-400 font-black uppercase text-[11px] tracking-[0.3em] rounded-[30px] hover:bg-slate-50 transition shadow-sm font-bold">Discard Changes</button>
+            <button 
+              onClick={handlePersist} 
+              disabled={isSaving}
+              className="flex-[2] py-6 bg-nook-900 text-white font-black uppercase text-[11px] tracking-[0.3em] rounded-[30px] hover:bg-nook-800 transition shadow-[0_25px_50px_-12px_rgba(23,177,105,0.4)] flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-wait group font-bold"
+            >
+              {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} className="group-hover:scale-110 transition" />}
+              <span>{isSaving ? 'Deploying...' : 'Save Production Unit'}</span>
+            </button>
           </footer>
         </div>
       </div>
-      <style>{`
-        .input-nook {
-          width: 100%;
-          padding: 1.25rem 1.5rem;
-          background: #f8fafc;
-          border: 2px solid transparent;
-          border-radius: 1.5rem;
-          outline: none;
-          font-weight: 600;
-          color: #0f172a;
-          transition: all 0.2s;
-        }
-        .input-nook:focus {
-          background: #fff;
-          border-color: #17B169;
-          box-shadow: 0 10px 15px -3px rgba(23, 177, 105, 0.1);
-        }
-        .input-nook::placeholder {
-          color: #94a3b8;
-          font-weight: 500;
-        }
-      `}</style>
     </div>
+  );
+};
+
+function StatCard({ label, value, icon: Icon, color }: any) {
+  return (
+    <div className="bg-white p-10 rounded-[44px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-500 group">
+      <div className={`p-5 rounded-[22px] shadow-sm self-start mb-8 group-hover:scale-110 transition-transform ${color}`}><Icon size={26} /></div>
+      <div>
+        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">{label}</span>
+        <div className="text-4xl font-serif font-bold text-slate-900 tracking-tight">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function ContentSection({ icon: Icon, title }: { icon: any, title: string }) {
+  return (
+    <div className="flex items-center space-x-6 border-l-[6px] border-nook-600 pl-8 mb-4">
+      <div className="p-3 bg-nook-50 text-nook-600 rounded-[14px] shadow-sm"><Icon size={20} /></div>
+      <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.4em] font-bold">{title}</h4>
+    </div>
+  );
+}
+
+function InputGroup({ label, type = 'text', value, onChange, placeholder, options }: any) {
+  const base = "w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all placeholder:text-slate-200";
+  
+  return (
+    <div className="space-y-4">
+      <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">{label}</label>
+      {type === 'textarea' ? (
+        <textarea rows={5} className={`${base} resize-none leading-relaxed`} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+      ) : type === 'select' ? (
+        <select className={base} value={value} onChange={e => onChange(e.target.value)}>
+          {options.map((o: string) => <option key={o} value={o} className="capitalize">{o}</option>)}
+        </select>
+      ) : (
+        <input type={type} className={base} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+      )}
+    </div>
+  );
+}
+
+function OperationalToggle({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!checked)} className="flex items-center space-x-5 group text-left">
+      <div className={`w-14 h-14 rounded-[22px] flex items-center justify-center transition-all border-2 ${checked ? 'bg-nook-900 border-nook-900 shadow-xl shadow-nook-900/20' : 'bg-white border-slate-200 group-hover:border-nook-300'}`}>
+        {checked ? <Check size={24} className="text-white" /> : <History size={24} className="text-slate-100" />}
+      </div>
+      <div>
+        <span className={`text-[11px] font-black uppercase tracking-widest transition-colors block font-bold ${checked ? 'text-nook-900' : 'text-slate-400'}`}>{label}</span>
+        <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">{checked ? 'Authorized' : 'Restricted'}</span>
+      </div>
+    </button>
   );
 }
 

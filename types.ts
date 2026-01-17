@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'admin',
   GUEST = 'guest',
@@ -29,8 +28,10 @@ export interface User {
 }
 
 export interface ListingImage {
-  url: string;
+  url: string; // Resolves to public URL for UI
+  path?: string; // Absolute path in Supabase bucket
   caption: string;
+  isAiGenerated?: boolean; // Indicates if asset was created by Gemini
 }
 
 export interface HouseRules {
@@ -92,6 +93,15 @@ export interface Booking {
   totalAmount: number;
   createdAt: string;
   guestCount: number;
+}
+
+export interface PaymentLog {
+  id: string;
+  bookingId: string;
+  txRef: string;
+  amount: number;
+  status: 'initiated' | 'success' | 'failed';
+  createdAt: string;
 }
 
 export interface AvailabilityConstraint {

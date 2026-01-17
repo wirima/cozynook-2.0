@@ -1,7 +1,8 @@
-
 import { Listing, Booking, BookingStatus, ListingType, User, UserRole, ListingImage, HouseRules, HostInfo, GuestExperience } from '../types';
-import { THE_COZY_NOOK_CONSTRAINTS, INITIAL_LISTINGS } from '../constants';
+import { THE_COZY_NOOK_CONSTRAINTS, INITIAL_LISTINGS, DEFAULT_HERO, FALLBACK_IMAGE } from '../constants';
 import { supabase } from './supabaseClient';
+
+const STORAGE_BUCKET = 'listing-images';
 
 class DatabaseService {
   private parseJsonField<T>(field: any, defaultValue: T): T {
@@ -18,6 +19,19 @@ class DatabaseService {
     return defaultValue;
   }
 
+  /**
+   * Resolves a stored path or URL to a usable public URL.
+   * If the input starts with 'http', it's treated as an external URL.
+   * Otherwise, it's treated as an absolute path within our Supabase bucket.
+   */
+  public resolveImageUrl(pathOrUrl: string | undefined): string {
+    if (!pathOrUrl || pathOrUrl.trim().length === 0) return FALLBACK_IMAGE;
+    if (pathOrUrl.startsWith('http')) return pathOrUrl;
+    
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(pathOrUrl);
+    return data.publicUrl;
+  }
+
   async getHeroImage(): Promise<string> {
     try {
       const { data, error } = await supabase
@@ -26,18 +40,20 @@ class DatabaseService {
         .eq('key', 'hero_image_url')
         .maybeSingle();
       
-      if (error) return 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
-      return data?.value || 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+      if (error || !data?.value) {
+        return DEFAULT_HERO;
+      }
+      return this.resolveImageUrl(data.value);
     } catch (err) {
-      return 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+      return DEFAULT_HERO;
     }
   }
 
-  async updateHeroImage(url: string): Promise<void> {
+  async updateHeroImage(pathOrUrl: string): Promise<void> {
     const { error } = await supabase
       .from('site_config')
       .upsert(
-        { key: 'hero_image_url', value: url, updated_at: new Date().toISOString() },
+        { key: 'hero_image_url', value: pathOrUrl, updated_at: new Date().toISOString() },
         { onConflict: 'key' }
       );
     if (error) throw error;
@@ -57,30 +73,40 @@ class DatabaseService {
 
       if (!data || data.length === 0) return [];
       
-      return data.map(l => ({
-        id: String(l.id),
-        name: String(l.name),
-        type: l.type as ListingType,
-        price: Number(l.price),
-        description: String(l.description),
-        shortSummary: String(l.short_summary),
-        amenities: this.parseJsonField<string[]>(l.amenities, []),
-        images: this.parseJsonField<ListingImage[]>(l.images, []),
-        maxGuests: Number(l.max_guests),
-        bedrooms: Number(l.bedrooms),
-        bathrooms: Number(l.bathrooms),
-        address: String(l.address),
-        checkInMethod: String(l.check_in_method),
-        checkInTime: String(l.check_in_time),
-        checkOutTime: String(l.check_out_time),
-        cleaningFee: Number(l.cleaning_fee),
-        securityDeposit: Number(l.security_deposit),
-        minStay: Number(l.min_stay),
-        maxStay: Number(l.max_stay),
-        houseRules: this.parseJsonField<HouseRules>(l.house_rules, {} as HouseRules),
-        hostInfo: this.parseJsonField<HostInfo>(l.host_info, {} as HostInfo),
-        guestExperience: this.parseJsonField<GuestExperience>(l.guest_experience, {} as GuestExperience)
-      } as Listing));
+      return data.map(l => {
+        const rawImages = this.parseJsonField<ListingImage[]>(l.images, []);
+        // Resolve paths to URLs for the UI
+        const resolvedImages = rawImages.map(img => ({
+          ...img,
+          url: this.resolveImageUrl(img.path || img.url),
+          isAiGenerated: !!img.isAiGenerated
+        }));
+
+        return {
+          id: String(l.id),
+          name: String(l.name),
+          type: l.type as ListingType,
+          price: Number(l.price),
+          description: String(l.description),
+          shortSummary: String(l.short_summary),
+          amenities: this.parseJsonField<string[]>(l.amenities, []),
+          images: resolvedImages,
+          maxGuests: Number(l.max_guests),
+          bedrooms: Number(l.bedrooms),
+          bathrooms: Number(l.bathrooms),
+          address: String(l.address),
+          checkInMethod: String(l.check_in_method),
+          checkInTime: String(l.check_in_time),
+          checkOutTime: String(l.check_out_time),
+          cleaningFee: Number(l.cleaning_fee),
+          securityDeposit: Number(l.security_deposit),
+          minStay: Number(l.min_stay),
+          maxStay: Number(l.max_stay),
+          houseRules: this.parseJsonField<HouseRules>(l.house_rules, {} as HouseRules),
+          hostInfo: this.parseJsonField<HostInfo>(l.host_info, {} as HostInfo),
+          guestExperience: this.parseJsonField<GuestExperience>(l.guest_experience, {} as GuestExperience)
+        } as Listing;
+      });
     } catch (err) {
       console.error("Critical production listing fetch failure:", err);
       return [];
@@ -88,11 +114,14 @@ class DatabaseService {
   }
 
   async saveListing(listing: Listing): Promise<void> {
-    const sanitizedImages = (listing.images || [])
-      .filter(img => img && typeof img.url === 'string' && img.url.trim().length > 0)
+    // We save the absolute PATH in the DB to keep it short and portable
+    const dbImages = (listing.images || [])
+      .filter(img => (img.path || img.url))
       .map(img => ({ 
-        url: img.url.trim(), 
-        caption: (img.caption || '').trim() 
+        path: img.path || (img.url?.startsWith('http') ? null : img.url), // Store path if it's internal
+        url: img.url?.startsWith('http') ? img.url : null, // Store URL only if it's external
+        caption: (img.caption || '').trim(),
+        isAiGenerated: !!img.isAiGenerated
       }));
 
     const payload = {
@@ -103,7 +132,7 @@ class DatabaseService {
       description: listing.description,
       short_summary: listing.shortSummary,
       amenities: listing.amenities || [],
-      images: sanitizedImages, 
+      images: dbImages, 
       max_guests: Number(listing.maxGuests),
       bedrooms: Number(listing.bedrooms),
       bathrooms: Number(listing.bathrooms),
@@ -111,11 +140,13 @@ class DatabaseService {
       check_in_method: listing.checkInMethod,
       check_in_time: listing.checkInTime,
       check_out_time: listing.checkOutTime,
+      // Fix: Use camelCase property names as defined in Listing interface from types.ts
       cleaning_fee: Number(listing.cleaningFee || 0),
       security_deposit: Number(listing.securityDeposit || 0),
       min_stay: Number(listing.minStay || 1),
       max_stay: Number(listing.maxStay || 30),
       house_rules: listing.houseRules || {},
+      // Fix: Access Listing property using camelCase hostInfo
       host_info: listing.hostInfo || {},
       guest_experience: listing.guestExperience || {}
     };

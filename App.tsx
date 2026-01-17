@@ -25,29 +25,36 @@ const App: React.FC = () => {
   useEffect(() => {
     const initialize = async () => {
       try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 4000));
+        const { data, error } = await supabase.auth.getSession();
         
-        const result = await Promise.race([sessionPromise, timeout]) as any;
-        const session = result?.data?.session;
-
-        if (session) {
-          handleSession(session).finally(() => setLoading(false));
-        } else {
+        // If we get the "Invalid Refresh Token" error, we must clear the session entirely
+        if (error) {
+          console.warn("Auth initialization error:", error.message);
+          if (error.message.includes("Refresh Token")) {
+            await supabase.auth.signOut();
+          }
           setLoading(false);
+          return;
+        }
+
+        if (data.session) {
+          await handleSession(data.session);
         }
       } catch (e: any) {
-        console.warn("Session init delayed or failed:", e?.message);
+        console.error("Critical Auth init failure:", e);
+      } finally {
         setLoading(false);
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         handleSession(session);
       } else {
         setCurrentUser(null);
-        if (view !== 'landing') setView('landing');
+        if (view !== 'landing' && view !== 'payment-success' && view !== 'payment-fail') {
+          setView('landing');
+        }
       }
     });
 
@@ -82,7 +89,6 @@ const App: React.FC = () => {
       
       setCurrentUser(user);
 
-      // If it was the first time, update the flag in background
       if (isFirstTime) {
         await supabase
           .from('profiles')
@@ -98,14 +104,6 @@ const App: React.FC = () => {
       }
     } catch (e: any) {
       console.error("Profile fetch error:", e?.message);
-      setCurrentUser({
-        uid: String(session.user.id),
-        email: String(session.user.email || ''),
-        role: UserRole.GUEST,
-        fullName: 'Valued Guest',
-        isFirstLogin: false,
-        isSuspended: false
-      });
     }
   };
 

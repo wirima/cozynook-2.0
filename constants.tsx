@@ -1,4 +1,3 @@
-
 import { Listing, ListingType } from './types';
 
 export const THE_COZY_NOOK_CONSTRAINTS = {
@@ -6,7 +5,10 @@ export const THE_COZY_NOOK_CONSTRAINTS = {
   ROOM_IDS: ['listing_exec_02', 'listing_deluxe_03', 'listing_room3_04', 'listing_room4_05'],
 };
 
-// Common configuration for default listing metadata
+// Centralized Assets
+export const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200';
+export const DEFAULT_HERO = 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070';
+
 const DEFAULT_META = {
   checkInMethod: 'Self check-in with lockbox',
   checkInTime: '15:00',
@@ -26,7 +28,7 @@ const DEFAULT_META = {
   },
   hostInfo: {
     displayName: 'The Cozy Nook',
-    avatarUrl: 'https://picsum.photos/seed/nook-host/200/200',
+    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=400',
     responseTime: 'Within an hour',
     languages: ['English', 'Chichewa'],
     verified: true
@@ -39,10 +41,6 @@ const DEFAULT_META = {
   }
 };
 
-/* 
-  Fix: Added missing properties (shortSummary, bedrooms, bathrooms, address, checkInMethod, etc.) 
-  to all initial listings to comply with the Listing interface definition in types.ts.
-*/
 export const INITIAL_LISTINGS: Listing[] = [
   {
     id: THE_COZY_NOOK_CONSTRAINTS.HOUSE_ID,
@@ -55,7 +53,11 @@ export const INITIAL_LISTINGS: Listing[] = [
     bedrooms: 4,
     bathrooms: 4,
     amenities: ['Full Kitchen', 'Private Garden', '4 Bathrooms', 'High-speed WiFi', 'Laundry', 'Security'],
-    images: [{ url: 'https://picsum.photos/seed/nook-house/1200/800', caption: 'Estate view' }],
+    images: [
+      { url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=1200', caption: 'Elegant Estate Exterior' },
+      { url: 'https://images.unsplash.com/photo-1513584684374-8bdb7489feef?auto=format&fit=crop&q=80&w=1200', caption: 'Modern Living Area' },
+      { url: 'https://images.unsplash.com/photo-1556911220-e150213ff16a?auto=format&fit=crop&q=80&w=1200', caption: 'Chef\'s Kitchen' }
+    ],
     ...DEFAULT_META
   },
   {
@@ -69,7 +71,10 @@ export const INITIAL_LISTINGS: Listing[] = [
     bedrooms: 1,
     bathrooms: 1,
     amenities: ['King Bed', 'Ensuite Bathroom', 'Workspace', 'Mini-bar', 'Smart TV'],
-    images: [{ url: 'https://picsum.photos/seed/nook-exec/1200/800', caption: 'Executive Suite' }],
+    images: [
+      { url: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=1200', caption: 'Executive Suite Interior' },
+      { url: 'https://images.unsplash.com/photo-1591088398332-8a77d399a80d?auto=format&fit=crop&q=80&w=1200', caption: 'Private En-suite' }
+    ],
     ...DEFAULT_META
   },
   {
@@ -83,7 +88,10 @@ export const INITIAL_LISTINGS: Listing[] = [
     bedrooms: 1,
     bathrooms: 1,
     amenities: ['Queen Bed', 'Private Balcony', 'Tea/Coffee station', 'AC'],
-    images: [{ url: 'https://picsum.photos/seed/nook-deluxe/1200/800', caption: 'Deluxe Room' }],
+    images: [
+      { url: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&q=80&w=1200', caption: 'Deluxe Suite Comfort' },
+      { url: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80&w=1200', caption: 'Garden View Balcony' }
+    ],
     ...DEFAULT_META
   },
   {
@@ -97,7 +105,9 @@ export const INITIAL_LISTINGS: Listing[] = [
     bedrooms: 1,
     bathrooms: 1,
     amenities: ['Double Bed', 'Shared Living', 'Ensuite', 'WiFi'],
-    images: [{ url: 'https://picsum.photos/seed/nook-room3/1200/800', caption: 'Room 3 Interior' }],
+    images: [
+      { url: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&q=80&w=1200', caption: 'Room 3 Minimalist Design' }
+    ],
     ...DEFAULT_META
   },
   {
@@ -111,7 +121,9 @@ export const INITIAL_LISTINGS: Listing[] = [
     bedrooms: 1,
     bathrooms: 1,
     amenities: ['Double Bed', 'Garden View', 'Desk', 'WiFi'],
-    images: [{ url: 'https://picsum.photos/seed/nook-room4/1200/800', caption: 'Room 4 Interior' }],
+    images: [
+      { url: 'https://images.unsplash.com/photo-1616594192358-af7717ca48a2?auto=format&fit=crop&q=80&w=1200', caption: 'Room 4 Serenity' }
+    ],
     ...DEFAULT_META
   },
 ];

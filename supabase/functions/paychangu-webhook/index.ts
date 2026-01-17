@@ -1,55 +1,109 @@
-// Fix: Declare Deno for the compiler as it is a global in Supabase Edge Functions
+
+// Setup type definitions for Deno
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+// Declare Deno global to fix "Cannot find name 'Deno'" error
 declare const Deno: any;
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Helpers for HMAC Verification
+const textEncoder = new TextEncoder();
+
+async function verifySignature(secret: string, signature: string, body: string): Promise<boolean> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    textEncoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+  
+  // Convert hex signature to Uint8Array
+  const signatureBytes = new Uint8Array(
+    signature.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+  );
+
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    signatureBytes,
+    textEncoder.encode(body)
+  );
+}
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   try {
-    const payload = await req.json()
-    console.log('Webhook Received:', JSON.stringify(payload))
+    const webhookSecret = Deno.env.get('PAYCHANGU_WEBHOOK_SECRET');
+    if (!webhookSecret) {
+      console.error("Missing PAYCHANGU_WEBHOOK_SECRET");
+      return new Response('Server Configuration Error', { status: 500 });
+    }
 
-    // Handle PayChangu success logic
+    const rawBody = await req.text();
+    const signature = req.headers.get('x-webhook-signature') || req.headers.get('paychangu-signature');
+
+    if (signature) {
+      const isValid = await verifySignature(webhookSecret, signature, rawBody);
+      if (!isValid) {
+        console.error("Invalid Signature");
+        return new Response('Invalid Signature', { status: 401 });
+      }
+    } else {
+      console.warn("Missing Signature Header");
+    }
+
+    const payload = JSON.parse(rawBody);
+    console.log('Webhook Payload:', JSON.stringify(payload));
+
     const isSuccess = payload.status === 'success' || payload.event === 'payment.success';
     
     if (isSuccess) {
-      const txRef = payload.tx_ref || payload.data?.tx_ref
-      
-      if (!txRef) return new Response('Missing tx_ref', { status: 400 })
+      const txRef = payload.tx_ref || payload.data?.tx_ref;
+      if (!txRef) return new Response('Missing tx_ref', { status: 400 });
 
-      // Format: nook_txn_{booking_id}_{timestamp}
-      const parts = txRef.split('_')
-      const bookingId = parts[2]
+      const parts = txRef.split('_');
+      // Expected format: nook_txn_{bookingId}_{timestamp}
+      const bookingId = parts[2];
 
       if (bookingId) {
-        console.log(`Webhook: Confirming Booking ${bookingId}`);
-        const { error } = await supabase
+        // 1. Mark Booking as Confirmed
+        const { error: bookingError } = await supabase
           .from('bookings')
           .update({ status: 'confirmed' })
-          .eq('id', bookingId)
+          .eq('id', bookingId);
 
-        if (error) {
-          console.error('DB Update Error:', error)
-          return new Response('Database Update Failed', { status: 500 })
+        if (bookingError) {
+          console.error('Booking Update Failed:', bookingError);
+          return new Response('Database Error', { status: 500 });
         }
+
+        // 2. Log Payment
+        await supabase
+          .from('payment_logs')
+          .upsert({
+            booking_id: bookingId,
+            tx_ref: txRef,
+            amount: payload.amount || payload.data?.amount || 0,
+            status: 'success',
+            gateway_response: payload
+          }, { onConflict: 'tx_ref' });
       }
     } else if (payload.status === 'failed') {
-       // Optional: Mark as cancelled if payment fails
-       const txRef = payload.tx_ref || payload.data?.tx_ref
-       const bookingId = txRef?.split('_')[2]
+       const txRef = payload.tx_ref || payload.data?.tx_ref;
+       const bookingId = txRef?.split('_')[2];
        if (bookingId) {
-         await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)
+         await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
        }
     }
 
-    return new Response('OK', { status: 200 })
+    return new Response('OK', { status: 200 });
+
   } catch (err: any) {
-    console.error('Webhook Error:', err.message)
-    return new Response('Internal Error', { status: 400 })
+    console.error('Webhook Error:', err.message);
+    return new Response(`Error: ${err.message}`, { status: 400 });
   }
-})
+});

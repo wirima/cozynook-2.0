@@ -1,8 +1,11 @@
--- THE COZY NOOK - SUPABASE DATABASE SCHEMA
--- Copy and paste this into your Supabase SQL Editor
 
--- 1. PROFILES TABLE
--- Stores user-specific information linked to Supabase Auth
+-- THE COZY NOOK - PRODUCTION DATABASE SCHEMA (v3.5)
+-- This script initializes the tables, security policies, and storage buckets required for the app.
+
+-- 1. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 2. PROFILES TABLE
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT,
@@ -13,17 +16,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. LISTINGS TABLE
--- Stores property and room details
+-- 3. LISTINGS TABLE (The core inventory)
 CREATE TABLE IF NOT EXISTS public.listings (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  type TEXT NOT NULL, -- 'house', 'room', 'apartment', 'studio'
+  type TEXT NOT NULL,
   price NUMERIC NOT NULL,
   description TEXT,
   short_summary TEXT,
-  amenities JSONB DEFAULT '[]',
-  images JSONB DEFAULT '[]',
+  amenities JSONB DEFAULT '[]'::jsonb,
+  images JSONB DEFAULT '[]'::jsonb, -- Array of {url, caption}
   max_guests INTEGER DEFAULT 2,
   bedrooms INTEGER DEFAULT 1,
   bathrooms INTEGER DEFAULT 1,
@@ -35,14 +37,13 @@ CREATE TABLE IF NOT EXISTS public.listings (
   security_deposit NUMERIC DEFAULT 0,
   min_stay INTEGER DEFAULT 1,
   max_stay INTEGER DEFAULT 30,
-  house_rules JSONB DEFAULT '{}',
-  host_info JSONB DEFAULT '{}',
-  guest_experience JSONB DEFAULT '{}',
+  house_rules JSONB DEFAULT '{}'::jsonb,
+  host_info JSONB DEFAULT '{}'::jsonb,
+  guest_experience JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. BOOKINGS TABLE
--- Stores reservation records
+-- 4. BOOKINGS TABLE
 CREATE TABLE IF NOT EXISTS public.bookings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -55,65 +56,79 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. SITE CONFIGURATION
--- Stores global settings like the hero image URL
+-- 5. SITE CONFIGURATION (Hero images, system flags)
 CREATE TABLE IF NOT EXISTS public.site_config (
   key TEXT PRIMARY KEY,
-  value TEXT,
+  value TEXT NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. ENABLE ROW LEVEL SECURITY (RLS)
+-- 6. SECURITY (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.listings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_config ENABLE ROW LEVEL SECURITY;
 
--- 6. RLS POLICIES
-
--- Profiles Policies
-CREATE POLICY "Public profiles are viewable by everyone." ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Users can update own profile." ON public.profiles FOR UPDATE USING (auth.uid() = id);
-
--- Listings Policies
-CREATE POLICY "Listings are viewable by everyone." ON public.listings FOR SELECT USING (true);
-CREATE POLICY "Admins can manage listings." ON public.listings FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Bookings Policies
-CREATE POLICY "Users can view own bookings." ON public.bookings FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own bookings." ON public.bookings FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Admins can view all bookings." ON public.bookings FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- Site Config Policies
-CREATE POLICY "Config viewable by everyone." ON public.site_config FOR SELECT USING (true);
-CREATE POLICY "Admins manage config." ON public.site_config FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-
--- 7. AUTOMATED PROFILE CREATION ON SIGNUP
--- This function runs whenever a new user signs up via Supabase Auth
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+-- 7. GLOBAL POLICIES (Idempotent)
+DO $$ 
 BEGIN
-  INSERT INTO public.profiles (id, full_name, email, role)
-  VALUES (
-    new.id, 
-    new.raw_user_meta_data->>'full_name', 
-    new.email, 
-    'guest'
-  );
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+    -- Listings: Everyone can view, only Admins can manage
+    DROP POLICY IF EXISTS "Public: View Listings" ON public.listings;
+    CREATE POLICY "Public: View Listings" ON public.listings FOR SELECT USING (true);
+    
+    DROP POLICY IF EXISTS "Admin: All Listings" ON public.listings;
+    CREATE POLICY "Admin: All Listings" ON public.listings FOR ALL TO authenticated 
+    USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
 
--- Trigger the function
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+    -- Bookings: Admins see all, Guests see their own
+    DROP POLICY IF EXISTS "Bookings: Admin Access" ON public.bookings;
+    CREATE POLICY "Bookings: Admin Access" ON public.bookings FOR ALL TO authenticated 
+    USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
 
--- 8. INITIAL DATA (Optional)
--- INSERT INTO public.site_config (key, value) VALUES ('hero_image_url', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=2070');
+    DROP POLICY IF EXISTS "Bookings: Guest Self-Access" ON public.bookings;
+    CREATE POLICY "Bookings: Guest Self-Access" ON public.bookings FOR SELECT TO authenticated 
+    USING (auth.uid() = user_id);
+
+    -- Profiles: Public can read basic info, Admins manage all, Users update self
+    DROP POLICY IF EXISTS "Profiles: Public View" ON public.profiles;
+    CREATE POLICY "Profiles: Public View" ON public.profiles FOR SELECT USING (true);
+    
+    DROP POLICY IF EXISTS "Profiles: User Update Self" ON public.profiles;
+    CREATE POLICY "Profiles: User Update Self" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+    -- Site Config: Public read, Admin write
+    DROP POLICY IF EXISTS "Config: Public Read" ON public.site_config;
+    CREATE POLICY "Config: Public Read" ON public.site_config FOR SELECT USING (true);
+
+    DROP POLICY IF EXISTS "Config: Admin Manage" ON public.site_config;
+    CREATE POLICY "Config: Admin Manage" ON public.site_config FOR ALL TO authenticated 
+    USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+END $$;
+
+-- 8. STORAGE SETUP (Crucial for Admin Image Uploads)
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('listing-images', 'listing-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$
+BEGIN
+    -- Allow everyone to view images
+    DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+    CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 'listing-images' );
+
+    -- Only Admins can upload to the listing-images bucket
+    DROP POLICY IF EXISTS "Admin Upload" ON storage.objects;
+    CREATE POLICY "Admin Upload" ON storage.objects FOR INSERT TO authenticated 
+    WITH CHECK (
+      bucket_id = 'listing-images' AND 
+      (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    );
+
+    -- Only Admins can update or delete objects
+    DROP POLICY IF EXISTS "Admin Update/Delete" ON storage.objects;
+    CREATE POLICY "Admin Update/Delete" ON storage.objects FOR ALL TO authenticated 
+    USING (
+      bucket_id = 'listing-images' AND 
+      (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    );
+END $$;
