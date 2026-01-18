@@ -15,6 +15,53 @@ import { GoogleGenAI } from "@google/genai";
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200';
 
+// --- Image Compression Utility ---
+const compressImage = (file: File): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1920; // Full HD is sufficient for web
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file); // Fallback to original if context fails
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            // Rename to .jpg and return
+            const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(newFile);
+          } else {
+            resolve(file); // Fallback
+          }
+        }, 'image/jpeg', 0.85); // 85% Quality is the sweet spot for Hero images
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 interface AdminDashboardProps {
   onLogout: () => void;
 }
@@ -72,12 +119,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     if (!e.target.files?.length) return;
     setUpdatingHero(true);
     try {
-      const file = e.target.files[0];
-      const ext = file.name.split('.').pop() || 'jpg';
+      const originalFile = e.target.files[0];
+      // Compress before uploading
+      const file = await compressImage(originalFile);
+      
+      const ext = 'jpg'; // We convert everything to JPG in compressImage
       const fileName = `hero_${Date.now()}.${ext}`;
       const filePath = `site/branding/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file, {
+        contentType: 'image/jpeg',
+        cacheControl: '3600',
+        upsert: true
+      });
       if (uploadError) throw uploadError;
 
       await db.updateHeroImage(filePath);
@@ -401,7 +455,6 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     }
     setIsAiGenerating(true);
     try {
-      // Fix: Always use named parameter for apiKey and use it directly from process.env.API_KEY
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Act as a luxury hospitality copywriter. Generate a compelling, high-end ${field === 'shortSummary' ? 'one-sentence summary' : 'multiline description'} for a property named "${draft.name}" which is a "${draft.type}". Focus on elegance, comfort, and the Malawian sanctuary vibe. Keep it professional.`;
       
@@ -428,7 +481,6 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     }
     setIsAiGenerating(true);
     try {
-      // Fix: Always use named parameter for apiKey and use it directly from process.env.API_KEY
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `A professional, ultra-luxury high-resolution architectural photograph of a "${draft.name}" which is a ${draft.type} at an upscale Malawian resort. Cinematic lighting, minimalist modern interior with high-quality wood and stone materials. 4k, photorealistic, elegant.`;
       
@@ -457,12 +509,18 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
       const blob = new Blob([byteArray], { type: 'image/png' });
       const file = new File([blob], `ai_${Date.now()}.png`, { type: 'image/png' });
 
+      // Compress AI image too, just in case
+      const compressedFile = await compressImage(file);
+
       // Upload to storage
       const safeDir = draft.id.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const fileName = `ai-asset-${Math.random().toString(36).substring(7)}.png`;
+      const fileName = `ai-asset-${Math.random().toString(36).substring(7)}.jpg`;
       const filePath = `${safeDir}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, compressedFile, {
+        contentType: 'image/jpeg',
+        cacheControl: '3600'
+      });
       if (uploadError) throw uploadError;
 
       const newAsset: ListingImage = {
@@ -472,7 +530,6 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
         isAiGenerated: true
       };
 
-      // AI images are appended to the end, ensuring manual ones stay at the front
       setDraft(prev => ({
         ...prev,
         images: [...(prev.images || []), newAsset]
@@ -492,13 +549,16 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
       const uploadedAssets: ListingImage[] = [];
       const safeDir = draft.id.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
-      for (const file of files) {
-        const ext = file.name.split('.').pop() || 'jpg';
+      for (const originalFile of files) {
+        // Compress and resize before uploading
+        const file = await compressImage(originalFile);
+        
+        const ext = 'jpg';
         const fileName = `asset-${Math.random().toString(36).substring(7)}.${ext}`;
         const filePath = `${safeDir}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file, { 
-          contentType: file.type,
+          contentType: 'image/jpeg',
           cacheControl: '3600'
         });
         if (uploadError) throw uploadError;
@@ -512,7 +572,6 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
       }
 
       setDraft(prev => {
-        // Manual uploads take precedence by being prepended to the array
         const newImages = [...uploadedAssets, ...(prev.images || [])];
         return { ...prev, images: newImages };
       });
@@ -758,7 +817,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
                     {uploading ? (
                       <div className="flex flex-col items-center space-y-4">
                         <Loader2 className="animate-spin text-nook-600" size={40} />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-nook-600">Uploading to Storage...</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-nook-600">Optimizing Asset...</span>
                       </div>
                     ) : (
                       <>

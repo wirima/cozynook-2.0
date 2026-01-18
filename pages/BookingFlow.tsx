@@ -107,7 +107,21 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
       if (invokeError) {
         console.error("Supabase Invoke Error:", invokeError);
-        throw new Error("Failed to connect to payment gateway. Please check your internet connection.");
+        
+        // Detailed error diagnostics
+        let msg = "Failed to connect to payment gateway.";
+        if (invokeError.message) {
+            if (invokeError.message.includes('404')) {
+                msg = "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed.";
+            } else if (invokeError.message.includes('500')) {
+                msg = "System Error: Payment function crashed (500). Please check Supabase Edge Function logs.";
+            } else if (invokeError.message.includes('Failed to fetch')) {
+                msg = "Connection Error: Unable to reach Supabase. Please check your internet connection.";
+            } else {
+                msg = `Gateway Error: ${invokeError.message}`;
+            }
+        }
+        throw new Error(msg);
       }
 
       if (data?.error) {

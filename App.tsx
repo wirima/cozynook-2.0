@@ -11,11 +11,14 @@ import AuthModal from './components/AuthModal';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [view, setView] = useState<'landing' | 'admin' | 'guest' | 'booking' | 'payment-success' | 'payment-fail'>('landing');
+  const [view, setView] = useState<'landing' | 'admin' | 'guest' | 'booking' | 'payment-success' | 'payment-fail' | 'verify-payment'>('landing');
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   
+  // For payment verification
+  const [verifyingBookingId, setVerifyingBookingId] = useState<string | null>(null);
+
   const [pendingBooking, setPendingBooking] = useState<{
     listingId: string;
     checkIn: string;
@@ -25,9 +28,21 @@ const App: React.FC = () => {
   useEffect(() => {
     const initialize = async () => {
       try {
+        // 1. Check for Payment Return Redirects
+        const params = new URLSearchParams(window.location.search);
+        const isPaymentReturn = params.get('payment_verifying');
+        const returnBookingId = params.get('booking_id');
+
+        if (isPaymentReturn === 'true' && returnBookingId) {
+          // Clean the URL so refreshing doesn't re-trigger
+          window.history.replaceState({}, '', window.location.pathname);
+          setVerifyingBookingId(returnBookingId);
+          setView('verify-payment');
+        }
+
+        // 2. Auth Session Check
         const { data, error } = await supabase.auth.getSession();
         
-        // If we get the "Invalid Refresh Token" error, we must clear the session entirely
         if (error) {
           console.warn("Auth initialization error:", error.message);
           if (error.message.includes("Refresh Token")) {
@@ -52,7 +67,8 @@ const App: React.FC = () => {
         handleSession(session);
       } else {
         setCurrentUser(null);
-        if (view !== 'landing' && view !== 'payment-success' && view !== 'payment-fail') {
+        // Only redirect to landing if we aren't in a special view
+        if (view !== 'landing' && view !== 'verify-payment') {
           setView('landing');
         }
       }
@@ -60,7 +76,7 @@ const App: React.FC = () => {
 
     initialize();
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // Run once on mount
 
   const handleSession = async (session: any) => {
     try {
@@ -96,11 +112,14 @@ const App: React.FC = () => {
           .eq('id', session.user.id);
       }
       
-      if (user.role === UserRole.ADMIN && view === 'landing') {
-        setView('admin');
-      } else if (pendingBooking && (view === 'landing' || isAuthModalOpen)) {
-        setView('booking');
-        setPendingBooking(null);
+      // Routing Logic (Only override if we aren't already verifying a payment)
+      if (view !== 'verify-payment') {
+        if (user.role === UserRole.ADMIN && view === 'landing') {
+          setView('admin');
+        } else if (pendingBooking && (view === 'landing' || isAuthModalOpen)) {
+          setView('booking');
+          setPendingBooking(null);
+        }
       }
     } catch (e: any) {
       console.error("Profile fetch error:", e?.message);
@@ -176,6 +195,8 @@ const App: React.FC = () => {
           user={currentUser} 
           bookingData={pendingBooking} 
           onComplete={(success) => {
+            // Note: This callback is less relevant now as the redirect handles it, 
+            // but we keep it for fallback/symmetry
             setView(success ? 'payment-success' : 'payment-fail');
             setPendingBooking(null);
           }}
@@ -186,6 +207,15 @@ const App: React.FC = () => {
         />
       )}
 
+      {/* New Verification View */}
+      {view === 'verify-payment' && verifyingBookingId && (
+        <PaymentResult 
+          bookingId={verifyingBookingId} 
+          onContinue={() => setView(currentUser ? 'guest' : 'landing')} 
+        />
+      )}
+
+      {/* Legacy Views (kept for manual testing or direct access) */}
       {view === 'payment-success' && (
         <PaymentResult success={true} onContinue={() => setView('guest')} />
       )}

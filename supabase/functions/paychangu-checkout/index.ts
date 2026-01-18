@@ -20,7 +20,14 @@ Deno.serve(async (req: Request) => {
     const { amount, email, phone, first_name, last_name, booking_id, currency = 'MWK' } = await req.json()
     
     const PAYCHANGU_SECRET_KEY = Deno.env.get('PAYCHANGU_SECRET_KEY');
+    
+    // We expect the origin to be passed, or we default to the known production URL
     const origin = req.headers.get('origin') || 'https://thecozynook.vercel.app';
+    
+    // PROJECT REF is needed to construct the webhook URL dynamically
+    // Alternatively, you can hardcode the webhook URL if preferred
+    const PROJECT_REF = 'cqflqyyhtmtqxhszatui'; 
+    const WEBHOOK_URL = `https://${PROJECT_REF}.supabase.co/functions/v1/paychangu-webhook`;
 
     if (!PAYCHANGU_SECRET_KEY) {
       console.error("Missing PAYCHANGU_SECRET_KEY");
@@ -34,8 +41,10 @@ Deno.serve(async (req: Request) => {
       phone: phone || "",
       first_name: first_name,
       last_name: last_name,
-      callback_url: `${origin}/payment-success?id=${booking_id}`,
-      return_url: `${origin}/payment-fail?id=${booking_id}`,
+      // CRITICAL: The callback URL must be the backend webhook, NOT the frontend
+      callback_url: WEBHOOK_URL,
+      // The return URL is where the user is redirected. We add a flag so the frontend knows to verify.
+      return_url: `${origin}/?payment_verifying=true&booking_id=${booking_id}`,
       tx_ref: `nook_txn_${booking_id}_${Date.now()}`,
       customization: {
         title: "The Cozy Nook Stay",
@@ -43,7 +52,7 @@ Deno.serve(async (req: Request) => {
       }
     };
 
-    console.log("Initiating PayChangu Payment:", { booking_id, amount, currency });
+    console.log("Initiating PayChangu Payment:", { booking_id, amount, currency, webhook: WEBHOOK_URL });
 
     const response = await fetch('https://api.paychangu.com/payment', {
       method: 'POST',
@@ -83,7 +92,7 @@ Deno.serve(async (req: Request) => {
     console.error("Edge Function Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400, // Return 400 instead of 500 to pass error message to client cleanly
+      status: 400, 
     });
   }
 });
