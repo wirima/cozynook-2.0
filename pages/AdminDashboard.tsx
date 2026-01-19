@@ -8,7 +8,7 @@ import {
   ChevronRight, ShieldCheck, Zap,
   Home, User as UserIcon, Star, Check, Database,
   Settings, ListChecks, DollarSign, FileText, Sparkles, Layers, History, ShieldAlert, Info, Loader2,
-  Shield, Clock, Palette, Upload, Wand2, Monitor, Banknote
+  Shield, Clock, Palette, Upload, Wand2, Monitor, Banknote, Mail, AlertTriangle, MoreHorizontal, ArrowRight
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { GoogleGenAI } from "@google/genai";
@@ -25,7 +25,7 @@ const compressImage = (file: File): Promise<File> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1920; // Full HD is sufficient for web
+        const MAX_WIDTH = 1920; 
         let width = img.width;
         let height = img.height;
 
@@ -38,23 +38,22 @@ const compressImage = (file: File): Promise<File> => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(file); // Fallback to original if context fails
+          resolve(file); 
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
         
         canvas.toBlob((blob) => {
           if (blob) {
-            // Rename to .jpg and return
             const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
               type: 'image/jpeg',
               lastModified: Date.now(),
             });
             resolve(newFile);
           } else {
-            resolve(file); // Fallback
+            resolve(file); 
           }
-        }, 'image/jpeg', 0.85); // 85% Quality is the sweet spot for Hero images
+        }, 'image/jpeg', 0.85); 
       };
       img.onerror = (error) => reject(error);
     };
@@ -80,7 +79,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [exchangeRate, setExchangeRate] = useState<number>(1750);
   const [updatingRate, setUpdatingRate] = useState(false);
 
+  // Modals
   const [configTarget, setConfigTarget] = useState<Listing | 'new' | null>(null);
+  const [userTarget, setUserTarget] = useState<User | 'new' | null>(null);
 
   useEffect(() => {
     refreshData();
@@ -138,10 +139,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setUpdatingHero(true);
     try {
       const originalFile = e.target.files[0];
-      // Compress before uploading
       const file = await compressImage(originalFile);
-      
-      const ext = 'jpg'; // We convert everything to JPG in compressImage
+      const ext = 'jpg'; 
       const fileName = `hero_${Date.now()}.${ext}`;
       const filePath = `site/branding/${fileName}`;
 
@@ -176,13 +175,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   };
 
   const handleDeleteListing = async (id: string) => {
-    if (!window.confirm("Permanently decommission this asset? This action is irreversible in the production environment.")) return;
+    if (!window.confirm("Permanently decommission this asset? This action is irreversible.")) return;
     setLoading(true);
     try {
       await db.deleteListing(id);
       await refreshData();
     } catch (err: any) {
       alert(`Decommissioning Failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (uid: string) => {
+    if (!window.confirm("Permanently remove this user record? This cannot be undone.")) return;
+    setLoading(true);
+    try {
+      await db.deleteUser(uid);
+      await refreshData();
+    } catch (err: any) {
+      alert(`Deletion Failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -207,10 +219,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         
         <nav className="flex-1 px-4 space-y-1 mt-4">
           {[
-            { id: 'overview', icon: LayoutDashboard, label: 'Control Center' },
-            { id: 'listings', icon: BedDouble, label: 'Property Assets' },
+            { id: 'overview', icon: LayoutDashboard, label: 'Dashboard' },
+            { id: 'listings', icon: BedDouble, label: 'Current Listings' },
             { id: 'bookings', icon: CalendarCheck, label: 'Reservations' },
-            { id: 'guests', icon: Users, label: 'User Registry' },
+            { id: 'guests', icon: Users, label: 'Users' },
           ].map((item) => (
             <button 
               key={item.id}
@@ -231,7 +243,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
         <div className="p-6 border-t border-slate-50">
           <button onClick={onLogout} className="w-full flex items-center justify-center space-x-3 px-4 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-brand-red border border-red-50 hover:bg-red-50 transition-colors">
-            <LogOut size={16} /> <span>Terminate Access</span>
+            <LogOut size={16} /> <span>Log Out</span>
           </button>
         </div>
       </aside>
@@ -269,7 +281,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                   className="bg-nook-900 p-8 rounded-[40px] flex flex-col justify-between cursor-pointer hover:bg-nook-800 transition-all shadow-2xl shadow-nook-900/30 group"
                 >
                   <div className="bg-white/10 p-4 rounded-2xl self-start group-hover:scale-110 transition duration-500"><Plus className="text-white" size={24} /></div>
-                  <h3 className="text-white font-bold text-lg tracking-tight">Deploy New Unit</h3>
+                  <h3 className="text-white font-bold text-lg tracking-tight">Add New Listing</h3>
                 </div>
               </div>
 
@@ -365,14 +377,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="flex justify-between items-end bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
                 <div>
-                  <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight">Deployment Console</h3>
+                  <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight">All Listings</h3>
                   <p className="text-sm text-slate-400 font-medium mt-1">Status and management of all property units.</p>
                 </div>
                 <button 
                   onClick={() => setConfigTarget('new')} 
                   className="flex items-center space-x-3 bg-slate-900 text-white px-10 py-5 rounded-[24px] text-[11px] font-black uppercase tracking-widest hover:bg-black transition shadow-2xl shadow-slate-900/20"
                 >
-                  <Plus size={18} /> <span>New Unit Configuration</span>
+                  <Plus size={18} /> <span>Add New Listing</span>
                 </button>
               </div>
 
@@ -401,7 +413,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                             }}
                           />
                           <div className="absolute top-6 left-6 bg-white/95 backdrop-blur-xl px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest text-nook-900 shadow-sm border border-slate-100">
-                            Production Unit
+                            Listing
                           </div>
                           <div className="absolute top-6 right-6 bg-slate-900/90 backdrop-blur-md px-5 py-2.5 rounded-2xl text-[12px] font-bold text-emerald-400 shadow-xl border border-white/10">
                             ${listing.price}<span className="text-[10px] text-white/40 ml-1 font-medium">/ NT</span>
@@ -415,7 +427,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                           <div className="flex justify-between items-center mb-5">
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-nook-600 bg-nook-50 px-4 py-1.5 rounded-xl border border-nook-100">{listing.type}</span>
                             <div className="flex items-center space-x-2 text-slate-300 font-bold text-[10px] uppercase tracking-widest">
-                              <ImageIcon size={14} /> <span>{(listing.images || []).length} Assets</span>
+                              <ImageIcon size={14} /> <span>{(listing.images || []).length} Images</span>
                             </div>
                           </div>
                           <h4 className="text-2xl font-serif font-bold text-slate-900 mb-3 tracking-tight">{listing.name}</h4>
@@ -428,9 +440,126 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               )}
             </div>
           )}
+
+          {activeTab === 'bookings' && (
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+               <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
+                  <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight mb-2">Reservations</h3>
+                  <p className="text-sm text-slate-400 font-medium">Global booking ledger.</p>
+               </div>
+               
+               <div className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm">
+                  <table className="w-full text-left">
+                     <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Ref ID</th>
+                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Guest</th>
+                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Listing</th>
+                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Dates</th>
+                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-50">
+                        {bookings.map(booking => {
+                           const guest = users.find(u => u.uid === booking.userId);
+                           const listing = listings.find(l => l.id === booking.listingId);
+                           return (
+                              <tr key={booking.id} className="hover:bg-slate-50/50 transition-colors">
+                                 <td className="px-8 py-6 text-xs font-bold text-slate-500 font-mono">#{booking.id.substring(0,6)}</td>
+                                 <td className="px-8 py-6">
+                                    <div className="font-bold text-slate-900 text-sm">{guest?.fullName || 'Unknown'}</div>
+                                    <div className="text-[10px] text-slate-400">{guest?.email}</div>
+                                 </td>
+                                 <td className="px-8 py-6 text-xs font-medium text-slate-600">{listing?.name || booking.listingId}</td>
+                                 <td className="px-8 py-6 text-xs text-slate-500">
+                                    {new Date(booking.checkIn).toLocaleDateString()} <ArrowRight size={10} className="inline mx-1"/> {new Date(booking.checkOut).toLocaleDateString()}
+                                 </td>
+                                 <td className="px-8 py-6">
+                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                       booking.status === BookingStatus.CONFIRMED ? 'bg-emerald-50 text-emerald-600' :
+                                       booking.status === BookingStatus.PENDING ? 'bg-amber-50 text-amber-600' :
+                                       'bg-red-50 text-brand-red'
+                                    }`}>
+                                       {booking.status}
+                                    </span>
+                                 </td>
+                                 <td className="px-8 py-6 text-right font-bold text-nook-900 text-sm">${booking.totalAmount}</td>
+                              </tr>
+                           );
+                        })}
+                     </tbody>
+                  </table>
+                  {bookings.length === 0 && (
+                     <div className="p-12 text-center text-slate-400 text-sm italic">No records found.</div>
+                  )}
+               </div>
+            </div>
+          )}
+
+          {activeTab === 'guests' && (
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+               <div className="flex justify-between items-end bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
+                  <div>
+                     <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight mb-2">User Registry</h3>
+                     <p className="text-sm text-slate-400 font-medium">Manage permissions and guest profiles.</p>
+                  </div>
+                  <button 
+                     onClick={() => setUserTarget('new')}
+                     className="flex items-center space-x-3 bg-nook-900 text-white px-8 py-4 rounded-[20px] text-[11px] font-black uppercase tracking-widest hover:bg-nook-800 transition shadow-lg"
+                  >
+                     <Plus size={16} /> <span>Add User</span>
+                  </button>
+               </div>
+               
+               <div className="grid gap-6">
+                  {users.map(user => (
+                     <div key={user.uid} className="bg-white p-8 rounded-[32px] border border-slate-100 flex items-center justify-between hover:border-nook-100 transition-all shadow-sm">
+                        <div className="flex items-center space-x-6">
+                           <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300">
+                              <UserIcon size={24} />
+                           </div>
+                           <div>
+                              <h4 className="text-lg font-bold text-slate-900 flex items-center space-x-3">
+                                 <span>{user.fullName}</span>
+                                 {user.role === UserRole.ADMIN && <ShieldCheck size={16} className="text-emerald-500" />}
+                              </h4>
+                              <div className="flex items-center space-x-4 mt-1">
+                                 <div className="flex items-center space-x-1 text-slate-400 text-xs">
+                                    <Mail size={12} /> <span>{user.email}</span>
+                                 </div>
+                                 <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${
+                                    user.isSuspended ? 'bg-red-50 text-brand-red border-red-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                                 }`}>
+                                    {user.isSuspended ? 'Suspended' : 'Active'}
+                                 </span>
+                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-300 bg-slate-50 px-2 py-0.5 rounded">{user.role}</span>
+                              </div>
+                           </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                           <button 
+                              onClick={() => setUserTarget(user)}
+                              className="w-12 h-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-nook-600 hover:border-nook-200 transition"
+                           >
+                              <Edit3 size={18} />
+                           </button>
+                           <button 
+                              onClick={() => handleDeleteUser(user.uid)}
+                              className="w-12 h-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-brand-red hover:border-red-100 transition"
+                           >
+                              <Trash2 size={18} />
+                           </button>
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            </div>
+          )}
         </div>
       </main>
 
+      {/* Listing Config Modal */}
       {configTarget && (
         <AssetConfigModule 
           target={configTarget === 'new' ? null : configTarget}
@@ -441,11 +570,173 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           }}
         />
       )}
+
+      {/* User Config Modal */}
+      {userTarget && (
+        <UserConfigModule
+           target={userTarget === 'new' ? null : userTarget}
+           onClose={() => setUserTarget(null)}
+           onComplete={async () => {
+              await refreshData();
+              setUserTarget(null);
+           }}
+        />
+      )}
     </div>
   );
 };
 
-// ... Rest of the components (AssetConfigModule, StatCard, etc) remain unchanged ...
+// ... Helper Components ...
+function StatCard({ label, value, icon: Icon, color }: any) {
+  return (
+    <div className="bg-white p-10 rounded-[44px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-500 group">
+      <div className={`p-5 rounded-[22px] shadow-sm self-start mb-8 group-hover:scale-110 transition-transform ${color}`}><Icon size={26} /></div>
+      <div>
+        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">{label}</span>
+        <div className="text-4xl font-serif font-bold text-slate-900 tracking-tight">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function ContentSection({ icon: Icon, title }: { icon: any, title: string }) {
+  return (
+    <div className="flex items-center space-x-6 border-l-[6px] border-nook-600 pl-8 mb-4">
+      <div className="p-3 bg-nook-50 text-nook-600 rounded-[14px] shadow-sm"><Icon size={20} /></div>
+      <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.4em] font-bold">{title}</h4>
+    </div>
+  );
+}
+
+function InputGroup({ label, type = 'text', value, onChange, placeholder, options }: any) {
+  const base = "w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all placeholder:text-slate-200";
+  
+  return (
+    <div className="space-y-4">
+      <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">{label}</label>
+      {type === 'textarea' ? (
+        <textarea rows={5} className={`${base} resize-none leading-relaxed`} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+      ) : type === 'select' ? (
+        <select className={base} value={value} onChange={e => onChange(e.target.value)}>
+          {options.map((o: string) => <option key={o} value={o} className="capitalize">{o}</option>)}
+        </select>
+      ) : (
+        <input type={type} className={base} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+      )}
+    </div>
+  );
+}
+
+function OperationalToggle({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) {
+  return (
+    <button onClick={() => onChange(!checked)} className="flex items-center space-x-5 group text-left">
+      <div className={`w-14 h-14 rounded-[22px] flex items-center justify-center transition-all border-2 ${checked ? 'bg-nook-900 border-nook-900 shadow-xl shadow-nook-900/20' : 'bg-white border-slate-200 group-hover:border-nook-300'}`}>
+        {checked ? <Check size={24} className="text-white" /> : <History size={24} className="text-slate-100" />}
+      </div>
+      <div>
+        <span className={`text-[11px] font-black uppercase tracking-widest transition-colors block font-bold ${checked ? 'text-nook-900' : 'text-slate-400'}`}>{label}</span>
+        <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">{checked ? 'Authorized' : 'Restricted'}</span>
+      </div>
+    </button>
+  );
+}
+
+// --- NEW COMPONENT: User Config Module ---
+interface UserConfigModuleProps {
+    target: User | null;
+    onClose: () => void;
+    onComplete: () => Promise<void>;
+}
+
+const UserConfigModule: React.FC<UserConfigModuleProps> = ({ target, onClose, onComplete }) => {
+    const [draft, setDraft] = useState<Partial<User>>(target || {
+        fullName: '',
+        email: '',
+        role: UserRole.GUEST,
+        isSuspended: false
+    });
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            if (target) {
+                // Update
+                if (!draft.uid) throw new Error("Invalid User ID");
+                await db.updateUser(draft as User);
+            } else {
+                // Create
+                await db.createManualProfile(draft);
+            }
+            await onComplete();
+        } catch (e: any) {
+            alert("Operation failed: " + e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 border border-white/20">
+                <div className="flex justify-between items-start mb-8">
+                   <div>
+                      <h3 className="text-2xl font-serif font-bold text-nook-900 mb-1">{target ? 'Edit Profile' : 'New User'}</h3>
+                      <p className="text-slate-400 text-sm">{target ? 'Modify existing permissions.' : 'Create a manual profile record.'}</p>
+                   </div>
+                   <button onClick={onClose} className="p-3 bg-slate-50 rounded-full hover:bg-slate-100 transition"><X size={20} className="text-slate-400" /></button>
+                </div>
+
+                <div className="space-y-6">
+                    <InputGroup 
+                        label="Full Name" 
+                        value={draft.fullName} 
+                        onChange={(v: string) => setDraft({...draft, fullName: v})} 
+                        placeholder="John Doe" 
+                    />
+                    <InputGroup 
+                        label="Email Address" 
+                        value={draft.email} 
+                        onChange={(v: string) => setDraft({...draft, email: v})} 
+                        placeholder="john@example.com" 
+                    />
+                    
+                    <div className="grid grid-cols-2 gap-6">
+                        <InputGroup 
+                            label="System Role" 
+                            type="select" 
+                            options={Object.values(UserRole)} 
+                            value={draft.role} 
+                            onChange={(v: string) => setDraft({...draft, role: v as UserRole})} 
+                        />
+                        <div className="pt-2">
+                            <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold block mb-4">Account Status</label>
+                            <OperationalToggle 
+                                label="Suspension" 
+                                checked={!!draft.isSuspended} 
+                                onChange={(v) => setDraft({...draft, isSuspended: v})} 
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-10 flex space-x-4">
+                    <button onClick={onClose} className="flex-1 py-4 bg-slate-50 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-2xl hover:bg-slate-100 transition">Cancel</button>
+                    <button 
+                        onClick={handleSave} 
+                        disabled={isSaving || !draft.fullName}
+                        className="flex-[2] py-4 bg-nook-900 text-white font-bold uppercase text-[10px] tracking-widest rounded-2xl hover:bg-nook-800 transition disabled:opacity-50 flex items-center justify-center space-x-2 shadow-lg shadow-nook-900/20"
+                    >
+                        {isSaving && <Loader2 size={14} className="animate-spin" />}
+                        <span>{target ? 'Update Profile' : 'Create User'}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ... Helper Components (AssetConfigModule, StatCard, etc) remain unchanged ...
 interface AssetConfigModuleProps {
   target: Listing | null;
   onClose: () => void;
@@ -508,11 +799,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     }
     setIsAiGenerating(true);
     try {
-      const apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
-      if (!apiKey) {
-        throw new Error("Missing API_KEY in environment variables. Set VITE_API_KEY in .env");
-      }
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Act as a luxury hospitality copywriter. Generate a compelling, high-end ${field === 'shortSummary' ? 'one-sentence summary' : 'multiline description'} for a property named "${draft.name}" which is a "${draft.type}". Focus on elegance, comfort, and the Malawian sanctuary vibe. Keep it professional.`;
       
       const response = await ai.models.generateContent({
@@ -538,11 +825,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     }
     setIsAiGenerating(true);
     try {
-      const apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
-      if (!apiKey) {
-        throw new Error("Missing API_KEY in environment variables. Set VITE_API_KEY in .env");
-      }
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `A professional, ultra-luxury high-resolution architectural photograph of a "${draft.name}" which is a ${draft.type} at an upscale Malawian resort. Cinematic lighting, minimalist modern interior with high-quality wood and stone materials. 4k, photorealistic, elegant.`;
       
       const response = await ai.models.generateContent({
@@ -723,7 +1006,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
           <div className="flex-1 overflow-y-auto px-14 pb-14 space-y-16 custom-scrollbar">
             {activeTab === 'identity' && (
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
-                <ContentSection icon={Sparkles} title="Global Positioning" />
+                <ContentSection icon={Sparkles} title="Location" />
                 <div className="grid md:grid-cols-2 gap-10">
                   <InputGroup label="Unit Display Name" value={draft.name} onChange={v => setDraft({...draft, name: v})} placeholder="The Ivory Oasis Penthouse" />
                   <InputGroup label="Asset Category" type="select" options={['house', 'room', 'apartment', 'studio']} value={draft.type} onChange={v => setDraft({...draft, type: v as ListingType})} />
@@ -931,7 +1214,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
               className="flex-[2] py-6 bg-nook-900 text-white font-black uppercase text-[11px] tracking-[0.3em] rounded-[30px] hover:bg-nook-800 transition shadow-[0_25px_50px_-12px_rgba(23,177,105,0.4)] flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-wait group font-bold"
             >
               {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} className="group-hover:scale-110 transition" />}
-              <span>{isSaving ? 'Deploying...' : 'Save Production Unit'}</span>
+              <span>{isSaving ? 'Deploying...' : 'Save Listing'}</span>
             </button>
           </footer>
         </div>
@@ -939,60 +1222,5 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     </div>
   );
 };
-
-// ... Helper Components ...
-function StatCard({ label, value, icon: Icon, color }: any) {
-  return (
-    <div className="bg-white p-10 rounded-[44px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-500 group">
-      <div className={`p-5 rounded-[22px] shadow-sm self-start mb-8 group-hover:scale-110 transition-transform ${color}`}><Icon size={26} /></div>
-      <div>
-        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest block mb-2">{label}</span>
-        <div className="text-4xl font-serif font-bold text-slate-900 tracking-tight">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function ContentSection({ icon: Icon, title }: { icon: any, title: string }) {
-  return (
-    <div className="flex items-center space-x-6 border-l-[6px] border-nook-600 pl-8 mb-4">
-      <div className="p-3 bg-nook-50 text-nook-600 rounded-[14px] shadow-sm"><Icon size={20} /></div>
-      <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.4em] font-bold">{title}</h4>
-    </div>
-  );
-}
-
-function InputGroup({ label, type = 'text', value, onChange, placeholder, options }: any) {
-  const base = "w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all placeholder:text-slate-200";
-  
-  return (
-    <div className="space-y-4">
-      <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">{label}</label>
-      {type === 'textarea' ? (
-        <textarea rows={5} className={`${base} resize-none leading-relaxed`} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-      ) : type === 'select' ? (
-        <select className={base} value={value} onChange={e => onChange(e.target.value)}>
-          {options.map((o: string) => <option key={o} value={o} className="capitalize">{o}</option>)}
-        </select>
-      ) : (
-        <input type={type} className={base} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-      )}
-    </div>
-  );
-}
-
-function OperationalToggle({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) {
-  return (
-    <button onClick={() => onChange(!checked)} className="flex items-center space-x-5 group text-left">
-      <div className={`w-14 h-14 rounded-[22px] flex items-center justify-center transition-all border-2 ${checked ? 'bg-nook-900 border-nook-900 shadow-xl shadow-nook-900/20' : 'bg-white border-slate-200 group-hover:border-nook-300'}`}>
-        {checked ? <Check size={24} className="text-white" /> : <History size={24} className="text-slate-100" />}
-      </div>
-      <div>
-        <span className={`text-[11px] font-black uppercase tracking-widest transition-colors block font-bold ${checked ? 'text-nook-900' : 'text-slate-400'}`}>{label}</span>
-        <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">{checked ? 'Authorized' : 'Restricted'}</span>
-      </div>
-    </button>
-  );
-}
 
 export default AdminDashboard;

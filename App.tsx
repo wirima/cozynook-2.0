@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from './types';
 import { supabase } from './services/supabaseClient';
@@ -68,7 +67,7 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
         // Only redirect to landing if we aren't in a special view
-        if (view !== 'landing' && view !== 'verify-payment') {
+        if (view !== 'landing' && view !== 'verify-payment' && view !== 'booking') {
           setView('landing');
         }
       }
@@ -148,13 +147,10 @@ const App: React.FC = () => {
   };
 
   const startBooking = (listingId: string, dates: { checkIn: string, checkOut: string }) => {
-    if (!currentUser) {
-      setPendingBooking({ listingId, ...dates });
-      openAuth('signup');
-    } else {
-      setPendingBooking({ listingId, ...dates });
-      setView('booking');
-    }
+    // UPDATED LOGIC: Allow anyone to enter booking flow.
+    // Auth is now handled INSIDE BookingFlow for guests.
+    setPendingBooking({ listingId, ...dates });
+    setView('booking');
   };
 
   if (loading) {
@@ -190,13 +186,11 @@ const App: React.FC = () => {
         />
       )}
 
-      {view === 'booking' && pendingBooking && currentUser && (
+      {view === 'booking' && pendingBooking && (
         <BookingFlow 
-          user={currentUser} 
+          user={currentUser} // Can be null now
           bookingData={pendingBooking} 
           onComplete={(success) => {
-            // Note: This callback is less relevant now as the redirect handles it, 
-            // but we keep it for fallback/symmetry
             setView(success ? 'payment-success' : 'payment-fail');
             setPendingBooking(null);
           }}

@@ -222,6 +222,32 @@ class DatabaseService {
     }));
   }
 
+  async updateUser(user: User): Promise<void> {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        full_name: user.fullName,
+        email: user.email, 
+        role: user.role, 
+        is_suspended: user.isSuspended 
+      })
+      .eq('id', user.uid);
+    if (error) throw error;
+  }
+
+  async createManualProfile(user: Partial<User>): Promise<void> {
+    // Generate a UUID for manual profiles (these users cannot login via auth, but exist as records)
+    const { error } = await supabase.from('profiles').insert({
+        id: crypto.randomUUID(),
+        full_name: user.fullName,
+        email: user.email,
+        role: user.role || UserRole.GUEST,
+        is_suspended: user.isSuspended || false,
+        has_logged_in_before: false
+    });
+    if (error) throw error;
+  }
+
   async updateUserRole(uid: string, role: UserRole): Promise<void> {
     const { error } = await supabase.from('profiles').update({ role }).eq('id', uid);
     if (error) throw error;
