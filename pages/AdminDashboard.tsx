@@ -508,7 +508,11 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     }
     setIsAiGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("Missing API_KEY in environment variables. Set VITE_API_KEY in .env");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `Act as a luxury hospitality copywriter. Generate a compelling, high-end ${field === 'shortSummary' ? 'one-sentence summary' : 'multiline description'} for a property named "${draft.name}" which is a "${draft.type}". Focus on elegance, comfort, and the Malawian sanctuary vibe. Keep it professional.`;
       
       const response = await ai.models.generateContent({
@@ -534,7 +538,11 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     }
     setIsAiGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+      if (!apiKey) {
+        throw new Error("Missing API_KEY in environment variables. Set VITE_API_KEY in .env");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `A professional, ultra-luxury high-resolution architectural photograph of a "${draft.name}" which is a ${draft.type} at an upscale Malawian resort. Cinematic lighting, minimalist modern interior with high-quality wood and stone materials. 4k, photorealistic, elegant.`;
       
       const response = await ai.models.generateContent({

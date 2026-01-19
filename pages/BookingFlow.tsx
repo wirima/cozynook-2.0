@@ -5,6 +5,8 @@ import { ShieldCheck, ArrowRight, CreditCard, Smartphone, CheckCircle2, ChevronL
 import { calculateTier } from '../services/tierService';
 import { supabase } from '../services/supabaseClient';
 
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
 interface BookingFlowProps {
   user: User;
   bookingData: { listingId: string; checkIn: string; checkOut: string };
@@ -14,7 +16,7 @@ interface BookingFlowProps {
 
 const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete, onCancel }) => {
   const [listing, setListing] = useState<Listing | null>(null);
-  
+
   // Mutable Date State
   const [checkInDate, setCheckInDate] = useState(bookingData.checkIn);
   const [checkOutDate, setCheckOutDate] = useState(bookingData.checkOut);
@@ -25,7 +27,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const [paymentStep, setPaymentStep] = useState<'summary' | 'method' | 'processing'>('summary');
   const [userBookings, setUserBookings] = useState<Booking[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+
   // Currency Logic
   const [currency, setCurrency] = useState<'USD' | 'MWK'>('USD');
   const [exchangeRate, setExchangeRate] = useState<number>(1750); // Default fallback
@@ -41,7 +43,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         db.getBookings(),
         db.getExchangeRate()
       ]);
-      
+
       const filteredBookings = allBookings.filter(b => b.userId === user.uid);
       setUserBookings(filteredBookings);
       setExchangeRate(rate);
@@ -70,7 +72,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         setIsCheckingAvailability(false);
       }
     };
-    
+
     // Debounce slightly to avoid spamming DB on rapid typing
     const timeout = setTimeout(check, 500);
     return () => clearTimeout(timeout);
@@ -83,7 +85,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
     const start = new Date(checkInDate);
     const end = new Date(checkOutDate);
     const nights = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (nights <= 0) return 0;
 
     const subtotal = nights * listing.price;
@@ -100,12 +102,12 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const handleCheckInChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
     setCheckInDate(newDate);
-    
+
     // If new check-in is after check-out, push check-out forward
     if (new Date(newDate) >= new Date(checkOutDate)) {
-        const nextDay = new Date(newDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        setCheckOutDate(nextDay.toISOString().split('T')[0]);
+      const nextDay = new Date(newDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      setCheckOutDate(nextDay.toISOString().split('T')[0]);
     }
   };
 
@@ -123,8 +125,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
     }
 
     if (new Date(checkInDate) >= new Date(checkOutDate)) {
-        setErrorMessage("Invalid dates selected. Check-out must be after check-in.");
-        return;
+      setErrorMessage("Invalid dates selected. Check-out must be after check-in.");
+      return;
     }
 
     if (isAvailable === false) {
@@ -134,7 +136,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
     setPaymentStep('processing');
     setErrorMessage(null);
-    
+
     try {
       if (!listing) throw new Error("Listing data missing.");
 
@@ -145,10 +147,10 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       }
 
       const totalUSD = calculateTotalUSD();
-      
+
       // Calculate the final amount to charge based on selected currency
       // If currency is MWK, convert using the active rate
-      const chargeAmount = currency === 'MWK' 
+      const chargeAmount = currency === 'MWK'
         ? Math.ceil(totalUSD * exchangeRate)
         : totalUSD;
 
@@ -170,9 +172,18 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
       console.log(`Invoking PayChangu Checkout (${currency})...`);
 
-      // 2. Invoke PayChangu Edge Function
+      if (!supabaseAnonKey) {
+        throw new Error("Payment config error: missing Supabase anon key");
+      }
+
+      // 2. Invoke PayChangu Edge Function with explicit anon key headers
       const { data, error: invokeError } = await supabase.functions.invoke('paychangu-checkout', {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
         body: {
+          return_origin: window.location.origin,
           amount: chargeAmount,
           currency: currency, // Pass the user's selected currency
           email: user.email,
@@ -185,19 +196,19 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
       if (invokeError) {
         console.error("Supabase Invoke Error:", invokeError);
-        
+
         // Detailed error diagnostics
         let msg = "Failed to connect to payment gateway.";
         if (invokeError.message) {
-            if (invokeError.message.includes('404')) {
-                msg = "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed via Supabase CLI.";
-            } else if (invokeError.message.includes('500')) {
-                msg = "System Error: Payment function crashed (500). Please check Supabase Edge Function logs for details.";
-            } else if (invokeError.message.includes('Failed to fetch')) {
-                msg = "Connection Blocked: Unable to reach the payment function. This is often caused by Ad Blockers (e.g., uBlock Origin) blocking 'checkout' URLs. Please disable your ad blocker for this site and try again.";
-            } else {
-                msg = `Gateway Error: ${invokeError.message}`;
-            }
+          if (invokeError.message.includes('404')) {
+            msg = "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed via Supabase CLI.";
+          } else if (invokeError.message.includes('500')) {
+            msg = "System Error: Payment function crashed (500). Please check Supabase Edge Function logs for details.";
+          } else if (invokeError.message.includes('Failed to fetch')) {
+            msg = "Connection Blocked: Unable to reach the payment function. This is often caused by Ad Blockers (e.g., uBlock Origin) blocking 'checkout' URLs. Please disable your ad blocker for this site and try again.";
+          } else {
+            msg = `Gateway Error: ${invokeError.message}`;
+          }
         }
         throw new Error(msg);
       }
@@ -206,7 +217,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         console.error("PayChangu API Error:", data.error);
         throw new Error(data.error);
       }
-      
+
       const checkoutUrl = data?.checkout_url || data?.data?.checkout_url;
 
       if (checkoutUrl) {
@@ -235,7 +246,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       {/* Sidebar: Summary & Branding */}
       <div className="md:w-2/5 bg-nook-900 text-white p-8 md:p-16 flex flex-col justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-        
+
         <button onClick={onCancel} className="text-white/60 hover:text-white flex items-center space-x-2 text-sm transition self-start group z-10">
           <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> <span>Abort & return</span>
         </button>
@@ -247,28 +258,28 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
           <div className="bg-white/10 border border-white/20 rounded-[40px] p-10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
             {/* Availability Indicator Overlay */}
             {isCheckingAvailability && (
-               <div className="absolute top-0 right-0 p-4">
-                 <Loader2 size={16} className="animate-spin text-white/50" />
-               </div>
+              <div className="absolute top-0 right-0 p-4">
+                <Loader2 size={16} className="animate-spin text-white/50" />
+              </div>
             )}
-            
+
             <div className="flex justify-between items-start mb-10 pb-6 border-b border-white/10">
-               <div>
-                  <div className="text-xl font-bold text-white mb-1">{listing.name}</div>
-                  <div className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">{listing.type}</div>
-               </div>
-               <div className="text-right">
-                  <div className="text-2xl font-bold text-emerald-400">${listing.price}</div>
-               </div>
+              <div>
+                <div className="text-xl font-bold text-white mb-1">{listing.name}</div>
+                <div className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">{listing.type}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-emerald-400">${listing.price}</div>
+              </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-8 mb-10">
               <div className="relative group">
                 <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest flex items-center space-x-1">
                   <CalendarIcon size={10} /> <span>Check In</span>
                 </div>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={checkInDate}
                   min={new Date().toISOString().split('T')[0]}
                   onChange={handleCheckInChange}
@@ -277,10 +288,10 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               </div>
               <div className="relative group">
                 <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest flex items-center space-x-1">
-                   <CalendarIcon size={10} /> <span>Check Out</span>
+                  <CalendarIcon size={10} /> <span>Check Out</span>
                 </div>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={checkOutDate}
                   min={checkInDate}
                   onChange={handleCheckOutChange}
@@ -293,18 +304,18 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               <span className="text-sm font-sans font-bold text-white/40 uppercase tracking-[0.2em]">Total</span>
               <div className="flex flex-col items-end">
                 <div className="flex items-baseline space-x-2">
-                    <span className="text-lg font-bold text-emerald-400 opacity-80">{currency === 'USD' ? '$' : 'MK'}</span>
-                    <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
+                  <span className="text-lg font-bold text-emerald-400 opacity-80">{currency === 'USD' ? '$' : 'MK'}</span>
+                  <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
                     {getDisplayAmount().toLocaleString()}
-                    </span>
+                  </span>
                 </div>
                 {isAvailable === false && !isCheckingAvailability && (
                   <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest bg-red-500/20 px-2 py-1 rounded mt-1">Dates Unavailable</span>
                 )}
                 {currency === 'MWK' && (
-                    <span className="text-[9px] text-white/40 font-bold mt-1 tracking-widest uppercase">
-                        Rate: 1 USD = {exchangeRate} MWK
-                    </span>
+                  <span className="text-[9px] text-white/40 font-bold mt-1 tracking-widest uppercase">
+                    Rate: 1 USD = {exchangeRate} MWK
+                  </span>
                 )}
               </div>
             </div>
@@ -339,28 +350,27 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
               {/* Currency Toggle */}
               <div className="bg-slate-50 p-2 rounded-full flex border border-slate-100 shadow-inner">
-                 <button 
-                    onClick={() => setCurrency('USD')}
-                    className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'USD' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
-                 >
-                    USD Payment
-                 </button>
-                 <button 
-                    onClick={() => setCurrency('MWK')}
-                    className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'MWK' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
-                 >
-                    Local MWK
-                 </button>
+                <button
+                  onClick={() => setCurrency('USD')}
+                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'USD' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                >
+                  USD Payment
+                </button>
+                <button
+                  onClick={() => setCurrency('MWK')}
+                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'MWK' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                >
+                  Local MWK
+                </button>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => setPaymentStep('method')}
                 disabled={isAvailable === false}
-                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${
-                  isAvailable === false 
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-nook-900 text-white hover:bg-nook-800'
-                }`}
+                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${isAvailable === false
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-nook-900 text-white hover:bg-nook-800'
+                  }`}
               >
                 <span>{isAvailable === false ? 'Select Different Dates' : `Pay ${currency === 'USD' ? '$' : 'MK'} ${getDisplayAmount().toLocaleString()}`}</span>
                 {isAvailable !== false && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
@@ -379,8 +389,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                 <label className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] ml-2">Phone Number</label>
                 <div className="relative">
                   <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                  <input 
-                    type="tel" 
+                  <input
+                    type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+265..."
@@ -390,13 +400,13 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               </div>
 
               <div className="p-5 bg-slate-50 rounded-[28px] text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Total Charge</span>
-                  <div className="text-2xl font-black text-nook-900">
-                    {currency === 'USD' ? '$' : 'MK'} {getDisplayAmount().toLocaleString()}
-                  </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Total Charge</span>
+                <div className="text-2xl font-black text-nook-900">
+                  {currency === 'USD' ? '$' : 'MK'} {getDisplayAmount().toLocaleString()}
+                </div>
               </div>
 
-              <button 
+              <button
                 onClick={handlePay}
                 className="w-full py-6 bg-nook-900 text-white rounded-[28px] font-black uppercase tracking-[0.2em] text-[12px] hover:bg-nook-800 transition-all shadow-2xl flex items-center justify-center space-x-4"
               >
