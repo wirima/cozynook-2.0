@@ -8,7 +8,7 @@ import {
   ChevronRight, ShieldCheck, Zap,
   Home, User as UserIcon, Star, Check, Database,
   Settings, ListChecks, DollarSign, FileText, Sparkles, Layers, History, ShieldAlert, Info, Loader2,
-  Shield, Clock, Palette, Upload, Wand2, Monitor
+  Shield, Clock, Palette, Upload, Wand2, Monitor, Banknote
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { GoogleGenAI } from "@google/genai";
@@ -75,6 +75,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [isSeeding, setIsSeeding] = useState(false);
   const [heroPath, setHeroPath] = useState('');
   const [updatingHero, setUpdatingHero] = useState(false);
+  
+  // Exchange Rate State
+  const [exchangeRate, setExchangeRate] = useState<number>(1750);
+  const [updatingRate, setUpdatingRate] = useState(false);
 
   const [configTarget, setConfigTarget] = useState<Listing | 'new' | null>(null);
 
@@ -85,20 +89,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [l, b, u, h] = await Promise.all([
+      const [l, b, u, h, r] = await Promise.all([
         db.getListings(),
         db.getBookings(),
         db.getAllUsers(),
-        db.getHeroImage()
+        db.getHeroImage(),
+        db.getExchangeRate()
       ]);
       setListings(l);
       setBookings(b);
       setUsers(u);
       setHeroPath(h);
+      setExchangeRate(r);
     } catch (err) {
       console.error("Critical Production Sync Error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateExchangeRate = async () => {
+    setUpdatingRate(true);
+    try {
+        await db.updateExchangeRate(exchangeRate);
+        alert(`Exchange rate updated: 1 USD = ${exchangeRate} MWK`);
+    } catch (err: any) {
+        alert("Failed to update exchange rate: " + err.message);
+    } finally {
+        setUpdatingRate(false);
     }
   };
 
@@ -256,6 +274,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {/* Branding Control */}
                 <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex flex-col space-y-8">
                   <div className="flex items-center space-x-4">
                     <div className="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><Palette size={24} /></div>
@@ -289,7 +308,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                   </div>
                 </div>
 
-                <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex items-center justify-between group">
+                {/* Financial Control */}
+                <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex flex-col space-y-8 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-nook-50 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                    <div className="flex items-center space-x-4 relative z-10">
+                        <div className="p-4 bg-nook-50 text-nook-600 rounded-2xl"><Banknote size={24} /></div>
+                        <h3 className="text-xl font-bold text-slate-900 font-serif">Financial Strategy</h3>
+                    </div>
+                    
+                    <div className="space-y-4 relative z-10">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Base Exchange Rate (USD to MWK)</label>
+                        <div className="flex items-center space-x-4 bg-slate-50 p-2 rounded-[24px] border-2 border-transparent focus-within:border-nook-600 focus-within:bg-white transition-all">
+                            <div className="pl-6 font-bold text-slate-400 text-sm">1 USD = </div>
+                            <input 
+                                type="number" 
+                                value={exchangeRate}
+                                onChange={(e) => setExchangeRate(Number(e.target.value))}
+                                className="flex-1 py-3 bg-transparent outline-none font-bold text-nook-900 text-lg"
+                            />
+                            <div className="pr-6 font-bold text-slate-400 text-xs uppercase tracking-widest">MWK</div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium ml-2">Updates propagate instantly to the booking engine.</p>
+                        
+                        <button 
+                            onClick={handleUpdateExchangeRate}
+                            disabled={updatingRate}
+                            className="w-full py-4 bg-slate-900 text-white rounded-[20px] font-bold text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
+                        >
+                            {updatingRate ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                            <span>Update Live Rate</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex items-center justify-between group col-span-1 lg:col-span-2">
                   <div className="flex items-center space-x-8">
                     <div className="p-6 bg-slate-50 text-nook-600 rounded-[32px] group-hover:bg-nook-50 transition-colors"><Database size={32}/></div>
                     <div>
@@ -393,6 +445,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   );
 };
 
+// ... Rest of the components (AssetConfigModule, StatCard, etc) remain unchanged ...
 interface AssetConfigModuleProps {
   target: Listing | null;
   onClose: () => void;
@@ -879,6 +932,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
   );
 };
 
+// ... Helper Components ...
 function StatCard({ label, value, icon: Icon, color }: any) {
   return (
     <div className="bg-white p-10 rounded-[44px] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-nook-200 transition-all duration-500 group">

@@ -59,6 +59,39 @@ class DatabaseService {
     if (error) throw error;
   }
 
+  // --- Exchange Rate Management ---
+
+  async getExchangeRate(): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from('site_config')
+        .select('value')
+        .eq('key', 'exchange_rate_mwk')
+        .maybeSingle();
+      
+      if (error || !data?.value) {
+        // Default fallback if not set in DB
+        return 1750; 
+      }
+      return Number(data.value) || 1750;
+    } catch (err) {
+      console.error("Failed to fetch exchange rate:", err);
+      return 1750;
+    }
+  }
+
+  async updateExchangeRate(rate: number): Promise<void> {
+    const { error } = await supabase
+      .from('site_config')
+      .upsert(
+        { key: 'exchange_rate_mwk', value: String(rate), updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      );
+    if (error) throw error;
+  }
+
+  // --------------------------------
+
   async getListings(): Promise<Listing[]> {
     try {
       const { data, error } = await supabase
@@ -140,13 +173,11 @@ class DatabaseService {
       check_in_method: listing.checkInMethod,
       check_in_time: listing.checkInTime,
       check_out_time: listing.checkOutTime,
-      // Fix: Use camelCase property names as defined in Listing interface from types.ts
       cleaning_fee: Number(listing.cleaningFee || 0),
       security_deposit: Number(listing.securityDeposit || 0),
       min_stay: Number(listing.minStay || 1),
       max_stay: Number(listing.maxStay || 30),
       house_rules: listing.houseRules || {},
-      // Fix: Access Listing property using camelCase hostInfo
       host_info: listing.hostInfo || {},
       guest_experience: listing.guestExperience || {}
     };

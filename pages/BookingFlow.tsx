@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mainDatabase';
 import { User, Listing, BookingStatus, Booking } from '../types';
-import { ShieldCheck, ArrowRight, CreditCard, Smartphone, CheckCircle2, ChevronLeft, Zap, Loader2, AlertCircle, PlayCircle, Phone, Lock, Calendar as CalendarIcon, User as UserIcon, CreditCard as CardIcon, XCircle } from 'lucide-react';
+import { ShieldCheck, ArrowRight, CreditCard, Smartphone, CheckCircle2, ChevronLeft, Zap, Loader2, AlertCircle, PlayCircle, Phone, Lock, Calendar as CalendarIcon, User as UserIcon, CreditCard as CardIcon, XCircle, RefreshCw } from 'lucide-react';
 import { calculateTier } from '../services/tierService';
 import { supabase } from '../services/supabaseClient';
 
@@ -23,23 +23,28 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
 
   const [paymentStep, setPaymentStep] = useState<'summary' | 'method' | 'processing'>('summary');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money'>('card');
   const [userBookings, setUserBookings] = useState<Booking[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
+  // Currency Logic
+  const [currency, setCurrency] = useState<'USD' | 'MWK'>('USD');
+  const [exchangeRate, setExchangeRate] = useState<number>(1750); // Default fallback
+
   // Contact State
   const [phone, setPhone] = useState('');
 
   // 1. Initial Data Load
   useEffect(() => {
     const init = async () => {
-      const [allListings, allBookings] = await Promise.all([
+      const [allListings, allBookings, rate] = await Promise.all([
         db.getListings(),
-        db.getBookings()
+        db.getBookings(),
+        db.getExchangeRate()
       ]);
       
       const filteredBookings = allBookings.filter(b => b.userId === user.uid);
       setUserBookings(filteredBookings);
+      setExchangeRate(rate);
 
       const match = allListings.find(l => l.id === bookingData.listingId);
       if (match) {
@@ -73,7 +78,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
   const tier = calculateTier(userBookings);
 
-  const calculateTotal = () => {
+  const calculateTotalUSD = () => {
     if (!listing) return 0;
     const start = new Date(checkInDate);
     const end = new Date(checkOutDate);
@@ -84,6 +89,12 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
     const subtotal = nights * listing.price;
     const discountAmount = subtotal * tier.discount;
     return Math.floor(subtotal - discountAmount);
+  };
+
+  const getDisplayAmount = () => {
+    const totalUSD = calculateTotalUSD();
+    if (currency === 'USD') return totalUSD;
+    return Math.ceil(totalUSD * exchangeRate);
   };
 
   const handleCheckInChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,34 +144,42 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         throw new Error("Availability expired. This property has been booked by another guest.");
       }
 
-      const total = calculateTotal();
+      const totalUSD = calculateTotalUSD();
       
+      // Calculate the final amount to charge based on selected currency
+      // If currency is MWK, convert using the active rate
+      const chargeAmount = currency === 'MWK' 
+        ? Math.ceil(totalUSD * exchangeRate)
+        : totalUSD;
+
       // 1. Create PENDING booking record in Supabase
+      // Note: We currently store the total_amount in USD in the DB schema for consistency,
+      // but the Payment Log will track the actual currency charged.
       const booking = await db.createBooking({
         userId: user.uid,
         listingId: listing.id,
         checkIn: checkInDate,
         checkOut: checkOutDate,
         status: BookingStatus.PENDING,
-        totalAmount: total,
+        totalAmount: totalUSD, // Keeping core record in USD for reporting stability
         guestCount: 2,
       });
 
       const [firstName, ...rest] = user.fullName.split(' ');
       const lastName = rest.join(' ') || 'Guest';
 
-      console.log("Invoking PayChangu Checkout Function...");
+      console.log(`Invoking PayChangu Checkout (${currency})...`);
 
-      // 2. Invoke PayChangu Edge Function to get hosted checkout URL
+      // 2. Invoke PayChangu Edge Function
       const { data, error: invokeError } = await supabase.functions.invoke('paychangu-checkout', {
         body: {
-          amount: total,
+          amount: chargeAmount,
+          currency: currency, // Pass the user's selected currency
           email: user.email,
           phone: phone,
           first_name: firstName,
           last_name: lastName,
-          booking_id: booking.id,
-          currency: 'MWK'
+          booking_id: booking.id
         }
       });
 
@@ -273,11 +292,19 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             <div className="flex justify-between items-center text-4xl font-serif text-white border-t border-white/10 pt-8">
               <span className="text-sm font-sans font-bold text-white/40 uppercase tracking-[0.2em]">Total</span>
               <div className="flex flex-col items-end">
-                <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
-                  ${calculateTotal()}
-                </span>
+                <div className="flex items-baseline space-x-2">
+                    <span className="text-lg font-bold text-emerald-400 opacity-80">{currency === 'USD' ? '$' : 'MK'}</span>
+                    <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
+                    {getDisplayAmount().toLocaleString()}
+                    </span>
+                </div>
                 {isAvailable === false && !isCheckingAvailability && (
                   <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest bg-red-500/20 px-2 py-1 rounded mt-1">Dates Unavailable</span>
+                )}
+                {currency === 'MWK' && (
+                    <span className="text-[9px] text-white/40 font-bold mt-1 tracking-widest uppercase">
+                        Rate: 1 USD = {exchangeRate} MWK
+                    </span>
                 )}
               </div>
             </div>
@@ -309,6 +336,22 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                 <h3 className="text-4xl font-serif text-nook-900 mb-4 tracking-tight">Stay Validated</h3>
                 <p className="text-slate-500 text-base font-medium leading-relaxed">Ready to secure your booking via our partner, PayChangu.</p>
               </div>
+
+              {/* Currency Toggle */}
+              <div className="bg-slate-50 p-2 rounded-full flex border border-slate-100 shadow-inner">
+                 <button 
+                    onClick={() => setCurrency('USD')}
+                    className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'USD' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                 >
+                    USD Payment
+                 </button>
+                 <button 
+                    onClick={() => setCurrency('MWK')}
+                    className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'MWK' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                 >
+                    Local MWK
+                 </button>
+              </div>
               
               <button 
                 onClick={() => setPaymentStep('method')}
@@ -319,7 +362,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                     : 'bg-nook-900 text-white hover:bg-nook-800'
                 }`}
               >
-                <span>{isAvailable === false ? 'Select Different Dates' : 'Proceed to PayChangu'}</span>
+                <span>{isAvailable === false ? 'Select Different Dates' : `Pay ${currency === 'USD' ? '$' : 'MK'} ${getDisplayAmount().toLocaleString()}`}</span>
                 {isAvailable !== false && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
               </button>
             </div>
@@ -344,6 +387,13 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                     className="w-full pl-16 pr-6 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[28px] text-lg font-bold text-nook-900 outline-none transition-all"
                   />
                 </div>
+              </div>
+
+              <div className="p-5 bg-slate-50 rounded-[28px] text-center">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Total Charge</span>
+                  <div className="text-2xl font-black text-nook-900">
+                    {currency === 'USD' ? '$' : 'MK'} {getDisplayAmount().toLocaleString()}
+                  </div>
               </div>
 
               <button 
