@@ -1,9 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../services/mainDatabase';
-import { User, Listing, BookingStatus, Booking } from '../types';
-import { ShieldCheck, ArrowRight, CreditCard, Smartphone, CheckCircle2, ChevronLeft, Zap, Loader2, AlertCircle, PlayCircle, Phone, Lock, Calendar as CalendarIcon, User as UserIcon, CreditCard as CardIcon, XCircle, RefreshCw } from 'lucide-react';
-import { calculateTier } from '../services/tierService';
-import { supabase } from '../services/supabaseClient';
+import React, { useState, useEffect } from "react";
+import { db } from "../services/mainDatabase";
+import { User, Listing, BookingStatus, Booking } from "../types";
+import {
+  ShieldCheck,
+  ArrowRight,
+  CreditCard,
+  Smartphone,
+  CheckCircle2,
+  ChevronLeft,
+  Zap,
+  Loader2,
+  AlertCircle,
+  PlayCircle,
+  Phone,
+  Lock,
+  Calendar as CalendarIcon,
+  User as UserIcon,
+  CreditCard as CardIcon,
+  XCircle,
+  RefreshCw,
+} from "lucide-react";
+import { calculateTier } from "../services/tierService";
+import { supabase } from "../services/supabaseClient";
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
@@ -24,16 +42,16 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
 
-  const [paymentStep, setPaymentStep] = useState<'summary' | 'method' | 'processing'>('summary');
+  const [paymentStep, setPaymentStep] = useState<"summary" | "method" | "processing">("summary");
   const [userBookings, setUserBookings] = useState<Booking[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Currency Logic
-  const [currency, setCurrency] = useState<'USD' | 'MWK'>('USD');
+  const [currency, setCurrency] = useState<"USD" | "MWK">("USD");
   const [exchangeRate, setExchangeRate] = useState<number>(1750); // Default fallback
 
   // Contact State
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState("");
 
   // 1. Initial Data Load
   useEffect(() => {
@@ -41,14 +59,14 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       const [allListings, allBookings, rate] = await Promise.all([
         db.getListings(),
         db.getBookings(),
-        db.getExchangeRate()
+        db.getExchangeRate(),
       ]);
 
-      const filteredBookings = allBookings.filter(b => b.userId === user.uid);
+      const filteredBookings = allBookings.filter((b) => b.userId === user.uid);
       setUserBookings(filteredBookings);
       setExchangeRate(rate);
 
-      const match = allListings.find(l => l.id === bookingData.listingId);
+      const match = allListings.find((l) => l.id === bookingData.listingId);
       if (match) {
         setListing(match);
       }
@@ -81,21 +99,71 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const tier = calculateTier(userBookings);
 
   const calculateTotalUSD = () => {
-    if (!listing) return 0;
-    const start = new Date(checkInDate);
-    const end = new Date(checkOutDate);
-    const nights = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (!listing || !listing.price) return 0;
+    if (!checkInDate || !checkOutDate) return 0;
 
-    if (nights <= 0) return 0;
+    // Parse dates properly - ensure we're working with date-only (no time component)
+    // Adding 'T00:00:00' ensures consistent parsing regardless of timezone
+    const start = new Date(checkInDate + "T00:00:00");
+    const end = new Date(checkOutDate + "T00:00:00");
 
-    const subtotal = nights * listing.price;
-    const discountAmount = subtotal * tier.discount;
-    return Math.floor(subtotal - discountAmount);
+    // Validate dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+
+    // Calculate nights: difference in days
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    // Ensure at least 1 night for any valid booking (check-out must be after check-in)
+    // If dates are same or check-out is before check-in, return 0
+    if (diffDays <= 0) {
+      // Double-check: if checkOutDate string is lexicographically greater than checkInDate,
+      // we should have at least 1 night (handles edge cases with date parsing)
+      if (checkOutDate > checkInDate) {
+        // Force 1 night minimum if dates are valid but calculation failed
+        const nights = 1;
+        const total = nights * listing.price;
+        return Math.max(0, Math.round(total * 100) / 100);
+      }
+      return 0;
+    }
+
+    // Round up to ensure we charge for partial days, but ensure minimum 1 night
+    const nights = Math.max(1, Math.ceil(diffDays));
+
+    // Calculate total without applying discount - show full price
+    const total = nights * listing.price;
+
+    // Debug logging (remove in production)
+    console.log("Price calculation:", {
+      checkInDate,
+      checkOutDate,
+      nights,
+      listingPrice: listing.price,
+      total,
+    });
+
+    // Return the total, ensuring it's never negative
+    // For currency, round to 2 decimal places
+    const finalTotal = Math.max(0, Math.round(total * 100) / 100);
+
+    // Critical: If we have valid nights and price, but total is 0, something is wrong
+    if (nights >= 1 && listing.price > 0 && finalTotal === 0) {
+      console.warn("Price calculation resulted in $0 for valid booking:", {
+        nights,
+        price: listing.price,
+        total,
+      });
+      // Return at least the minimum charge (1 cent) to prevent $0 bookings
+      return Math.max(0.01, total);
+    }
+
+    return finalTotal;
   };
 
   const getDisplayAmount = () => {
     const totalUSD = calculateTotalUSD();
-    if (currency === 'USD') return totalUSD;
+    if (currency === "USD") return totalUSD;
     return Math.ceil(totalUSD * exchangeRate);
   };
 
@@ -107,7 +175,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
     if (new Date(newDate) >= new Date(checkOutDate)) {
       const nextDay = new Date(newDate);
       nextDay.setDate(nextDay.getDate() + 1);
-      setCheckOutDate(nextDay.toISOString().split('T')[0]);
+      setCheckOutDate(nextDay.toISOString().split("T")[0]);
     }
   };
 
@@ -134,7 +202,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       return;
     }
 
-    setPaymentStep('processing');
+    setPaymentStep("processing");
     setErrorMessage(null);
 
     try {
@@ -150,9 +218,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
       // Calculate the final amount to charge based on selected currency
       // If currency is MWK, convert using the active rate
-      const chargeAmount = currency === 'MWK'
-        ? Math.ceil(totalUSD * exchangeRate)
-        : totalUSD;
+      const chargeAmount = currency === "MWK" ? Math.ceil(totalUSD * exchangeRate) : totalUSD;
 
       // 1. Create PENDING booking record in Supabase
       // Note: We currently store the total_amount in USD in the DB schema for consistency,
@@ -167,8 +233,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         guestCount: 2,
       });
 
-      const [firstName, ...rest] = user.fullName.split(' ');
-      const lastName = rest.join(' ') || 'Guest';
+      const [firstName, ...rest] = user.fullName.split(" ");
+      const lastName = rest.join(" ") || "Guest";
 
       console.log(`Invoking PayChangu Checkout (${currency})...`);
 
@@ -177,7 +243,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       }
 
       // 2. Invoke PayChangu Edge Function with explicit anon key headers
-      const { data, error: invokeError } = await supabase.functions.invoke('paychangu-checkout', {
+      const { data, error: invokeError } = await supabase.functions.invoke("paychangu-checkout", {
         headers: {
           apikey: supabaseAnonKey,
           Authorization: `Bearer ${supabaseAnonKey}`,
@@ -190,8 +256,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
           phone: phone,
           first_name: firstName,
           last_name: lastName,
-          booking_id: booking.id
-        }
+          booking_id: booking.id,
+        },
       });
 
       if (invokeError) {
@@ -200,12 +266,15 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         // Detailed error diagnostics
         let msg = "Failed to connect to payment gateway.";
         if (invokeError.message) {
-          if (invokeError.message.includes('404')) {
-            msg = "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed via Supabase CLI.";
-          } else if (invokeError.message.includes('500')) {
-            msg = "System Error: Payment function crashed (500). Please check Supabase Edge Function logs for details.";
-          } else if (invokeError.message.includes('Failed to fetch')) {
-            msg = "Connection Blocked: Unable to reach the payment function. This is often caused by Ad Blockers (e.g., uBlock Origin) blocking 'checkout' URLs. Please disable your ad blocker for this site and try again.";
+          if (invokeError.message.includes("404")) {
+            msg =
+              "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed via Supabase CLI.";
+          } else if (invokeError.message.includes("500")) {
+            msg =
+              "System Error: Payment function crashed (500). Please check Supabase Edge Function logs for details.";
+          } else if (invokeError.message.includes("Failed to fetch")) {
+            msg =
+              "Connection Blocked: Unable to reach the payment function. This is often caused by Ad Blockers (e.g., uBlock Origin) blocking 'checkout' URLs. Please disable your ad blocker for this site and try again.";
           } else {
             msg = `Gateway Error: ${invokeError.message}`;
           }
@@ -230,16 +299,19 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
     } catch (err: any) {
       console.error("Checkout Flow Error:", err);
       setErrorMessage(err.message || "An unexpected error occurred during checkout.");
-      setPaymentStep('method');
+      setPaymentStep("method");
     }
   };
 
-  if (!listing) return (
-    <div className="min-h-screen flex items-center justify-center bg-white flex-col space-y-4">
-      <div className="w-10 h-10 border-2 border-nook-100 border-t-nook-600 rounded-full animate-spin"></div>
-      <p className="text-[10px] font-bold text-nook-600 uppercase tracking-widest animate-pulse">Syncing Stay Data</p>
-    </div>
-  );
+  if (!listing)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white flex-col space-y-4">
+        <div className="w-10 h-10 border-2 border-nook-100 border-t-nook-600 rounded-full animate-spin"></div>
+        <p className="text-[10px] font-bold text-nook-600 uppercase tracking-widest animate-pulse">
+          Syncing Stay Data
+        </p>
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
@@ -247,13 +319,21 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       <div className="md:w-2/5 bg-nook-900 text-white p-8 md:p-16 flex flex-col justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
 
-        <button onClick={onCancel} className="text-white/60 hover:text-white flex items-center space-x-2 text-sm transition self-start group z-10">
-          <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> <span>Abort & return</span>
+        <button
+          onClick={onCancel}
+          className="text-white/60 hover:text-white flex items-center space-x-2 text-sm transition self-start group z-10"
+        >
+          <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />{" "}
+          <span>Abort & return</span>
         </button>
 
         <div className="mt-12 md:mt-0 z-10 w-full">
-          <h1 className="text-4xl font-serif mb-4 leading-tight tracking-tight text-emerald-50">Confirm Reservation</h1>
-          <p className="text-white/80 font-light mb-12 text-lg">Secure your dates via PayChangu's official platform.</p>
+          <h1 className="text-4xl font-serif mb-4 leading-tight tracking-tight text-emerald-50">
+            Confirm Reservation
+          </h1>
+          <p className="text-white/80 font-light mb-12 text-lg">
+            Secure your dates via PayChangu's official platform.
+          </p>
 
           <div className="bg-white/10 border border-white/20 rounded-[40px] p-10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
             {/* Availability Indicator Overlay */}
@@ -266,7 +346,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             <div className="flex justify-between items-start mb-10 pb-6 border-b border-white/10">
               <div>
                 <div className="text-xl font-bold text-white mb-1">{listing.name}</div>
-                <div className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">{listing.type}</div>
+                <div className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">
+                  {listing.type}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-emerald-400">${listing.price}</div>
@@ -281,7 +363,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                 <input
                   type="date"
                   value={checkInDate}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={new Date().toISOString().split("T")[0]}
                   onChange={handleCheckInChange}
                   className="bg-transparent text-white/90 font-bold w-full outline-none border-b border-white/20 focus:border-white transition-colors pb-1 cursor-pointer [color-scheme:dark]"
                 />
@@ -301,18 +383,28 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             </div>
 
             <div className="flex justify-between items-center text-4xl font-serif text-white border-t border-white/10 pt-8">
-              <span className="text-sm font-sans font-bold text-white/40 uppercase tracking-[0.2em]">Total</span>
+              <span className="text-sm font-sans font-bold text-white/40 uppercase tracking-[0.2em]">
+                Total
+              </span>
               <div className="flex flex-col items-end">
                 <div className="flex items-baseline space-x-2">
-                  <span className="text-lg font-bold text-emerald-400 opacity-80">{currency === 'USD' ? '$' : 'MK'}</span>
-                  <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
+                  <span className="text-lg font-bold text-emerald-400 opacity-80">
+                    {currency === "USD" ? "$" : "MK"}
+                  </span>
+                  <span
+                    className={`font-bold tracking-tight transition-opacity ${
+                      isCheckingAvailability ? "opacity-50" : "opacity-100"
+                    }`}
+                  >
                     {getDisplayAmount().toLocaleString()}
                   </span>
                 </div>
                 {isAvailable === false && !isCheckingAvailability && (
-                  <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest bg-red-500/20 px-2 py-1 rounded mt-1">Dates Unavailable</span>
+                  <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest bg-red-500/20 px-2 py-1 rounded mt-1">
+                    Dates Unavailable
+                  </span>
                 )}
-                {currency === 'MWK' && (
+                {currency === "MWK" && (
                   <span className="text-[9px] text-white/40 font-bold mt-1 tracking-widest uppercase">
                     Rate: 1 USD = {exchangeRate} MWK
                   </span>
@@ -338,57 +430,90 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             </div>
           )}
 
-          {paymentStep === 'summary' && (
+          {paymentStep === "summary" && (
             <div className="space-y-12 animate-in fade-in">
               <div className="text-center">
                 <div className="w-24 h-24 bg-nook-50 rounded-[32px] flex items-center justify-center mx-auto mb-10 text-nook-600 border border-nook-100 shadow-xl shadow-nook-900/5 rotate-3">
                   <CheckCircle2 size={48} />
                 </div>
-                <h3 className="text-4xl font-serif text-nook-900 mb-4 tracking-tight">Stay Validated</h3>
-                <p className="text-slate-500 text-base font-medium leading-relaxed">Ready to secure your booking via our partner, PayChangu.</p>
+                <h3 className="text-4xl font-serif text-nook-900 mb-4 tracking-tight">
+                  Stay Validated
+                </h3>
+                <p className="text-slate-500 text-base font-medium leading-relaxed">
+                  Ready to secure your booking via our partner, PayChangu.
+                </p>
               </div>
 
               {/* Currency Toggle */}
               <div className="bg-slate-50 p-2 rounded-full flex border border-slate-100 shadow-inner">
                 <button
-                  onClick={() => setCurrency('USD')}
-                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'USD' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                  onClick={() => setCurrency("USD")}
+                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+                    currency === "USD"
+                      ? "bg-white text-nook-900 shadow-md transform scale-100"
+                      : "text-slate-400 hover:text-nook-900"
+                  }`}
                 >
                   USD Payment
                 </button>
                 <button
-                  onClick={() => setCurrency('MWK')}
-                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'MWK' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                  onClick={() => setCurrency("MWK")}
+                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+                    currency === "MWK"
+                      ? "bg-white text-nook-900 shadow-md transform scale-100"
+                      : "text-slate-400 hover:text-nook-900"
+                  }`}
                 >
                   Local MWK
                 </button>
               </div>
 
               <button
-                onClick={() => setPaymentStep('method')}
+                onClick={() => setPaymentStep("method")}
                 disabled={isAvailable === false}
-                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${isAvailable === false
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-nook-900 text-white hover:bg-nook-800'
-                  }`}
+                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${
+                  isAvailable === false
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : "bg-nook-900 text-white hover:bg-nook-800"
+                }`}
               >
-                <span>{isAvailable === false ? 'Select Different Dates' : `Pay ${currency === 'USD' ? '$' : 'MK'} ${getDisplayAmount().toLocaleString()}`}</span>
-                {isAvailable !== false && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+                <span>
+                  {isAvailable === false
+                    ? "Select Different Dates"
+                    : `Pay ${
+                        currency === "USD" ? "$" : "MK"
+                      } ${getDisplayAmount().toLocaleString()}`}
+                </span>
+                {isAvailable !== false && (
+                  <ArrowRight
+                    size={20}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                )}
               </button>
             </div>
           )}
 
-          {paymentStep === 'method' && (
+          {paymentStep === "method" && (
             <div className="space-y-10 animate-in fade-in">
               <div className="text-center">
-                <h3 className="text-3xl font-serif text-nook-900 mb-2 tracking-tight">One Last Step</h3>
-                <p className="text-slate-400 text-sm font-medium">Provide your contact phone for the payment gateway prompt.</p>
+                <h3 className="text-3xl font-serif text-nook-900 mb-2 tracking-tight">
+                  One Last Step
+                </h3>
+                <p className="text-slate-400 text-sm font-medium">
+                  Provide your contact phone for the payment gateway prompt.
+                </p>
               </div>
 
               <div className="space-y-3">
-                <label className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] ml-2">Phone Number</label>
+                <label className="text-[10px] uppercase font-black text-slate-400 tracking-[0.2em] ml-2">
+                  Phone Number
+                </label>
                 <div className="relative">
-                  <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                  <Phone
+                    className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300"
+                    size={18}
+                  />
                   <input
                     type="tel"
                     value={phone}
@@ -400,9 +525,11 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               </div>
 
               <div className="p-5 bg-slate-50 rounded-[28px] text-center">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Total Charge</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">
+                  Total Charge
+                </span>
                 <div className="text-2xl font-black text-nook-900">
-                  {currency === 'USD' ? '$' : 'MK'} {getDisplayAmount().toLocaleString()}
+                  {currency === "USD" ? "$" : "MK"} {getDisplayAmount().toLocaleString()}
                 </div>
               </div>
 
@@ -416,7 +543,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             </div>
           )}
 
-          {paymentStep === 'processing' && (
+          {paymentStep === "processing" && (
             <div className="text-center space-y-12 animate-in fade-in">
               <div className="relative w-32 h-32 mx-auto">
                 <div className="absolute inset-0 border-[6px] border-nook-50 rounded-full"></div>
@@ -426,8 +553,12 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="text-3xl font-serif text-nook-900 tracking-tight">Connecting Gateway</h3>
-                <p className="text-slate-400 text-base font-medium leading-relaxed max-w-[280px] mx-auto">You will be redirected to PayChangu's secure platform in a moment.</p>
+                <h3 className="text-3xl font-serif text-nook-900 tracking-tight">
+                  Connecting Gateway
+                </h3>
+                <p className="text-slate-400 text-base font-medium leading-relaxed max-w-[280px] mx-auto">
+                  You will be redirected to PayChangu's secure platform in a moment.
+                </p>
               </div>
             </div>
           )}
