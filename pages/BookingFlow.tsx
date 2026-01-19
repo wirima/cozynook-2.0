@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mainDatabase';
 import { User, Listing, BookingStatus, Booking } from '../types';
-import { ShieldCheck, ArrowRight, CreditCard, Smartphone, CheckCircle2, ChevronLeft, Zap, Loader2, AlertCircle, PlayCircle, Phone, Lock, Calendar as CalendarIcon, User as UserIcon, CreditCard as CardIcon } from 'lucide-react';
+import { ShieldCheck, ArrowRight, CreditCard, Smartphone, CheckCircle2, ChevronLeft, Zap, Loader2, AlertCircle, PlayCircle, Phone, Lock, Calendar as CalendarIcon, User as UserIcon, CreditCard as CardIcon, XCircle } from 'lucide-react';
 import { calculateTier } from '../services/tierService';
 import { supabase } from '../services/supabaseClient';
 
@@ -14,7 +14,14 @@ interface BookingFlowProps {
 
 const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete, onCancel }) => {
   const [listing, setListing] = useState<Listing | null>(null);
+  
+  // Mutable Date State
+  const [checkInDate, setCheckInDate] = useState(bookingData.checkIn);
+  const [checkOutDate, setCheckOutDate] = useState(bookingData.checkOut);
+
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+
   const [paymentStep, setPaymentStep] = useState<'summary' | 'method' | 'processing'>('summary');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money'>('card');
   const [userBookings, setUserBookings] = useState<Booking[]>([]);
@@ -23,6 +30,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   // Contact State
   const [phone, setPhone] = useState('');
 
+  // 1. Initial Data Load
   useEffect(() => {
     const init = async () => {
       const [allListings, allBookings] = await Promise.all([
@@ -36,23 +44,65 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       const match = allListings.find(l => l.id === bookingData.listingId);
       if (match) {
         setListing(match);
-        const avail = await db.checkAvailability(match.id, bookingData.checkIn, bookingData.checkOut);
-        setIsAvailable(avail);
       }
     };
     init();
-  }, [bookingData, user.uid]);
+  }, [bookingData.listingId, user.uid]);
+
+  // 2. Availability Re-check on Date Change
+  useEffect(() => {
+    const check = async () => {
+      if (!listing) return;
+      setIsCheckingAvailability(true);
+      setIsAvailable(null); // Reset while checking
+      try {
+        const avail = await db.checkAvailability(listing.id, checkInDate, checkOutDate);
+        setIsAvailable(avail);
+      } catch (e) {
+        console.error("Availability check failed", e);
+        setIsAvailable(false);
+      } finally {
+        setIsCheckingAvailability(false);
+      }
+    };
+    
+    // Debounce slightly to avoid spamming DB on rapid typing
+    const timeout = setTimeout(check, 500);
+    return () => clearTimeout(timeout);
+  }, [listing, checkInDate, checkOutDate]);
 
   const tier = calculateTier(userBookings);
 
   const calculateTotal = () => {
     if (!listing) return 0;
-    const start = new Date(bookingData.checkIn);
-    const end = new Date(bookingData.checkOut);
+    const start = new Date(checkInDate);
+    const end = new Date(checkOutDate);
     const nights = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const subtotal = (nights > 0 ? nights : 1) * listing.price;
+    
+    if (nights <= 0) return 0;
+
+    const subtotal = nights * listing.price;
     const discountAmount = subtotal * tier.discount;
     return Math.floor(subtotal - discountAmount);
+  };
+
+  const handleCheckInChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    setCheckInDate(newDate);
+    
+    // If new check-in is after check-out, push check-out forward
+    if (new Date(newDate) >= new Date(checkOutDate)) {
+        const nextDay = new Date(newDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        setCheckOutDate(nextDay.toISOString().split('T')[0]);
+    }
+  };
+
+  const handleCheckOutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    // Prevent selecting a date before check-in
+    if (new Date(newDate) <= new Date(checkInDate)) return;
+    setCheckOutDate(newDate);
   };
 
   const handlePay = async () => {
@@ -61,16 +111,25 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       return;
     }
 
-    if (new Date(bookingData.checkIn) >= new Date(bookingData.checkOut)) {
+    if (new Date(checkInDate) >= new Date(checkOutDate)) {
         setErrorMessage("Invalid dates selected. Check-out must be after check-in.");
         return;
+    }
+
+    if (isAvailable === false) {
+      setErrorMessage("The selected dates are no longer available.");
+      return;
     }
 
     setPaymentStep('processing');
     setErrorMessage(null);
     
     try {
-      if (!listing || !isAvailable) {
+      if (!listing) throw new Error("Listing data missing.");
+
+      // Final availability check before commit
+      const finalCheck = await db.checkAvailability(listing.id, checkInDate, checkOutDate);
+      if (!finalCheck) {
         throw new Error("Availability expired. This property has been booked by another guest.");
       }
 
@@ -80,8 +139,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       const booking = await db.createBooking({
         userId: user.uid,
         listingId: listing.id,
-        checkIn: bookingData.checkIn,
-        checkOut: bookingData.checkOut,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
         status: BookingStatus.PENDING,
         totalAmount: total,
         guestCount: 2,
@@ -112,11 +171,11 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         let msg = "Failed to connect to payment gateway.";
         if (invokeError.message) {
             if (invokeError.message.includes('404')) {
-                msg = "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed.";
+                msg = "System Error: Payment function not found (404). Please ensure 'paychangu-checkout' is deployed via Supabase CLI.";
             } else if (invokeError.message.includes('500')) {
-                msg = "System Error: Payment function crashed (500). Please check Supabase Edge Function logs.";
+                msg = "System Error: Payment function crashed (500). Please check Supabase Edge Function logs for details.";
             } else if (invokeError.message.includes('Failed to fetch')) {
-                msg = "Connection Error: Unable to reach Supabase. Please check your internet connection.";
+                msg = "Connection Blocked: Unable to reach the payment function. This is often caused by Ad Blockers (e.g., uBlock Origin) blocking 'checkout' URLs. Please disable your ad blocker for this site and try again.";
             } else {
                 msg = `Gateway Error: ${invokeError.message}`;
             }
@@ -162,11 +221,18 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
           <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> <span>Abort & return</span>
         </button>
 
-        <div className="mt-12 md:mt-0 z-10">
+        <div className="mt-12 md:mt-0 z-10 w-full">
           <h1 className="text-4xl font-serif mb-4 leading-tight tracking-tight text-emerald-50">Confirm Reservation</h1>
           <p className="text-white/80 font-light mb-12 text-lg">Secure your dates via PayChangu's official platform.</p>
 
-          <div className="bg-white/10 border border-white/20 rounded-[40px] p-10 backdrop-blur-xl shadow-2xl">
+          <div className="bg-white/10 border border-white/20 rounded-[40px] p-10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+            {/* Availability Indicator Overlay */}
+            {isCheckingAvailability && (
+               <div className="absolute top-0 right-0 p-4">
+                 <Loader2 size={16} className="animate-spin text-white/50" />
+               </div>
+            )}
+            
             <div className="flex justify-between items-start mb-10 pb-6 border-b border-white/10">
                <div>
                   <div className="text-xl font-bold text-white mb-1">{listing.name}</div>
@@ -178,19 +244,42 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             </div>
             
             <div className="grid grid-cols-2 gap-8 mb-10">
-              <div>
-                <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest">Check In</div>
-                <div className="text-base font-bold text-white/90">{new Date(bookingData.checkIn).toLocaleDateString()}</div>
+              <div className="relative group">
+                <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest flex items-center space-x-1">
+                  <CalendarIcon size={10} /> <span>Check In</span>
+                </div>
+                <input 
+                  type="date" 
+                  value={checkInDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={handleCheckInChange}
+                  className="bg-transparent text-white/90 font-bold w-full outline-none border-b border-white/20 focus:border-white transition-colors pb-1 cursor-pointer [color-scheme:dark]"
+                />
               </div>
-              <div>
-                <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest">Check Out</div>
-                <div className="text-base font-bold text-white/90">{new Date(bookingData.checkOut).toLocaleDateString()}</div>
+              <div className="relative group">
+                <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest flex items-center space-x-1">
+                   <CalendarIcon size={10} /> <span>Check Out</span>
+                </div>
+                <input 
+                  type="date" 
+                  value={checkOutDate}
+                  min={checkInDate}
+                  onChange={handleCheckOutChange}
+                  className="bg-transparent text-white/90 font-bold w-full outline-none border-b border-white/20 focus:border-white transition-colors pb-1 cursor-pointer [color-scheme:dark]"
+                />
               </div>
             </div>
 
             <div className="flex justify-between items-center text-4xl font-serif text-white border-t border-white/10 pt-8">
               <span className="text-sm font-sans font-bold text-white/40 uppercase tracking-[0.2em]">Total</span>
-              <span className="font-bold tracking-tight">${calculateTotal()}</span>
+              <div className="flex flex-col items-end">
+                <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
+                  ${calculateTotal()}
+                </span>
+                {isAvailable === false && !isCheckingAvailability && (
+                  <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest bg-red-500/20 px-2 py-1 rounded mt-1">Dates Unavailable</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -223,10 +312,15 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               
               <button 
                 onClick={() => setPaymentStep('method')}
-                className="w-full py-6 bg-nook-900 text-white rounded-[24px] font-black uppercase tracking-widest text-xs hover:bg-nook-800 transition-all flex items-center justify-center space-x-4 shadow-2xl group"
+                disabled={isAvailable === false}
+                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${
+                  isAvailable === false 
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : 'bg-nook-900 text-white hover:bg-nook-800'
+                }`}
               >
-                <span>Proceed to PayChangu</span>
-                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                <span>{isAvailable === false ? 'Select Different Dates' : 'Proceed to PayChangu'}</span>
+                {isAvailable !== false && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
               </button>
             </div>
           )}
