@@ -1005,7 +1005,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
                 <ContentSection icon={Sparkles} title="Location" />
                 <div className="grid md:grid-cols-2 gap-10">
                   <InputGroup label="Unit Display Name" value={draft.name} onChange={v => setDraft({ ...draft, name: v })} placeholder="The Ivory Oasis Penthouse" />
-                  <InputGroup label="Asset Category" type="select" options={['Entire House', 'Room']} value={draft.type} onChange={v => setDraft({ ...draft, type: v as ListingType })} />
+                  <InputGroup label="Asset Category" type="select" options={['house', 'room', 'apartment', 'studio']} value={draft.type} onChange={v => setDraft({ ...draft, type: v as ListingType })} />
                 </div>
 
                 <div className="space-y-4">
