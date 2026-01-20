@@ -101,7 +101,10 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
     const subtotal = nights * listing.price;
     const discountAmount = subtotal * tier.discount;
-    return Math.floor(subtotal - discountAmount);
+    const finalAmount = subtotal - discountAmount;
+
+    // Return at least $1 to avoid showing $0 for valid bookings
+    return Math.max(1, Math.round(finalAmount));
   };
 
   const getDisplayAmount = () => {
