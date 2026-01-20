@@ -410,8 +410,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                 onClick={() => setPaymentStep('method')}
                 disabled={isAvailable === false}
                 className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${isAvailable === false
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-nook-900 text-white hover:bg-nook-800'
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-nook-900 text-white hover:bg-nook-800'
                   }`}
               >
                 <span>{isAvailable === false ? 'Select Different Dates' : `Proceed to ${user ? 'Checkout' : 'Guest Details'}`}</span>
