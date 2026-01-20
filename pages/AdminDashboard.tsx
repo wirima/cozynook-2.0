@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/mainDatabase';
 import { Listing, Booking, BookingStatus, User, UserRole, ListingType, ListingImage, HouseRules, HostInfo, GuestExperience } from '../types';
-import { 
-  LayoutDashboard, BedDouble, CalendarCheck, Users, LogOut, 
-  Plus, TrendingUp, CheckCircle2, Trash2, 
+import {
+  LayoutDashboard, BedDouble, CalendarCheck, Users, LogOut,
+  Plus, TrendingUp, CheckCircle2, Trash2,
   Camera, Save, X, Edit3, Image as ImageIcon,
   ChevronRight, ShieldCheck, Zap,
   Home, User as UserIcon, Star, Check, Database,
@@ -25,7 +25,7 @@ const compressImage = (file: File): Promise<File> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1920; 
+        const MAX_WIDTH = 1920;
         let width = img.width;
         let height = img.height;
 
@@ -38,11 +38,11 @@ const compressImage = (file: File): Promise<File> => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(file); 
+          resolve(file);
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         canvas.toBlob((blob) => {
           if (blob) {
             const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
@@ -51,9 +51,9 @@ const compressImage = (file: File): Promise<File> => {
             });
             resolve(newFile);
           } else {
-            resolve(file); 
+            resolve(file);
           }
-        }, 'image/jpeg', 0.85); 
+        }, 'image/jpeg', 0.85);
       };
       img.onerror = (error) => reject(error);
     };
@@ -74,7 +74,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [isSeeding, setIsSeeding] = useState(false);
   const [heroPath, setHeroPath] = useState('');
   const [updatingHero, setUpdatingHero] = useState(false);
-  
+
   // Exchange Rate State
   const [exchangeRate, setExchangeRate] = useState<number>(1750);
   const [updatingRate, setUpdatingRate] = useState(false);
@@ -112,12 +112,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const handleUpdateExchangeRate = async () => {
     setUpdatingRate(true);
     try {
-        await db.updateExchangeRate(exchangeRate);
-        alert(`Exchange rate updated: 1 USD = ${exchangeRate} MWK`);
+      await db.updateExchangeRate(exchangeRate);
+      alert(`Exchange rate updated: 1 USD = ${exchangeRate} MWK`);
     } catch (err: any) {
-        alert("Failed to update exchange rate: " + err.message);
+      alert("Failed to update exchange rate: " + err.message);
     } finally {
-        setUpdatingRate(false);
+      setUpdatingRate(false);
     }
   };
 
@@ -140,7 +140,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     try {
       const originalFile = e.target.files[0];
       const file = await compressImage(originalFile);
-      const ext = 'jpg'; 
+      const ext = 'jpg';
       const fileName = `hero_${Date.now()}.${ext}`;
       const filePath = `site/branding/${fileName}`;
 
@@ -216,7 +216,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           </div>
           <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-full inline-block mt-2">Global Controller</div>
         </div>
-        
+
         <nav className="flex-1 px-4 space-y-1 mt-4">
           {[
             { id: 'overview', icon: LayoutDashboard, label: 'Dashboard' },
@@ -224,14 +224,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             { id: 'bookings', icon: CalendarCheck, label: 'Reservations' },
             { id: 'guests', icon: Users, label: 'Users' },
           ].map((item) => (
-            <button 
+            <button
               key={item.id}
               onClick={() => setActiveTab(item.id as any)}
-              className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold transition-all group ${
-                activeTab === item.id 
-                  ? 'bg-nook-900 text-white shadow-xl shadow-nook-900/20' 
+              className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold transition-all group ${activeTab === item.id
+                  ? 'bg-nook-900 text-white shadow-xl shadow-nook-900/20'
                   : 'text-slate-400 hover:bg-slate-50 hover:text-nook-900'
-              }`}
+                }`}
             >
               <div className="flex items-center space-x-3">
                 <item.icon size={18} /> <span>{item.label}</span>
@@ -253,8 +252,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           <div className="flex flex-col">
             <h2 className="text-2xl font-serif font-bold text-nook-900 capitalize tracking-tight">{activeTab}</h2>
             <div className="flex items-center space-x-2 mt-1">
-               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Network: <span className="text-emerald-500">Encrypted Production</span></p>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Network: <span className="text-emerald-500">Encrypted Production</span></p>
             </div>
           </div>
           <div className="flex items-center space-x-6">
@@ -276,8 +275,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 <StatCard label="Live Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={TrendingUp} color="bg-emerald-50 text-emerald-600" />
                 <StatCard label="Confirmed Stays" value={stats.activeBookings} icon={CalendarCheck} color="bg-blue-50 text-blue-600" />
                 <StatCard label="Verified Accounts" value={stats.totalGuests} icon={Users} color="bg-violet-50 text-violet-600" />
-                <div 
-                  onClick={() => setConfigTarget('new')} 
+                <div
+                  onClick={() => setConfigTarget('new')}
                   className="bg-nook-900 p-8 rounded-[40px] flex flex-col justify-between cursor-pointer hover:bg-nook-800 transition-all shadow-2xl shadow-nook-900/30 group"
                 >
                   <div className="bg-white/10 p-4 rounded-2xl self-start group-hover:scale-110 transition duration-500"><Plus className="text-white" size={24} /></div>
@@ -295,14 +294,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                   <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Main Hero Path or URL</label>
                     <div className="flex space-x-3">
-                      <input 
-                        type="text" 
-                        value={heroPath} 
+                      <input
+                        type="text"
+                        value={heroPath}
                         onChange={(e) => setHeroPath(e.target.value)}
                         placeholder="site/branding/hero.jpg"
                         className="flex-1 px-6 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[20px] outline-none text-sm font-medium transition-all"
                       />
-                      <button 
+                      <button
                         onClick={handleUpdateHero}
                         disabled={updatingHero}
                         className="px-6 py-4 bg-nook-900 text-white rounded-[20px] font-bold text-xs uppercase tracking-widest hover:bg-nook-800 transition-all shadow-lg disabled:opacity-50"
@@ -311,59 +310,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                       </button>
                     </div>
                     <div className="flex items-center justify-between pt-2">
-                       <label className="cursor-pointer flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition">
-                         <Upload size={14} />
-                         <span>Upload New Hero Asset</span>
-                         <input type="file" hidden accept="image/*" onChange={handleHeroUpload} />
-                       </label>
+                      <label className="cursor-pointer flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition">
+                        <Upload size={14} />
+                        <span>Upload New Hero Asset</span>
+                        <input type="file" hidden accept="image/*" onChange={handleHeroUpload} />
+                      </label>
                     </div>
                   </div>
                 </div>
 
                 {/* Financial Control */}
                 <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex flex-col space-y-8 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-nook-50 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                    <div className="flex items-center space-x-4 relative z-10">
-                        <div className="p-4 bg-nook-50 text-nook-600 rounded-2xl"><Banknote size={24} /></div>
-                        <h3 className="text-xl font-bold text-slate-900 font-serif">Financial Strategy</h3>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-nook-50 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                  <div className="flex items-center space-x-4 relative z-10">
+                    <div className="p-4 bg-nook-50 text-nook-600 rounded-2xl"><Banknote size={24} /></div>
+                    <h3 className="text-xl font-bold text-slate-900 font-serif">Financial Strategy</h3>
+                  </div>
+
+                  <div className="space-y-4 relative z-10">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Base Exchange Rate (USD to MWK)</label>
+                    <div className="flex items-center space-x-4 bg-slate-50 p-2 rounded-[24px] border-2 border-transparent focus-within:border-nook-600 focus-within:bg-white transition-all">
+                      <div className="pl-6 font-bold text-slate-400 text-sm">1 USD = </div>
+                      <input
+                        type="number"
+                        value={exchangeRate}
+                        onChange={(e) => setExchangeRate(Number(e.target.value))}
+                        className="flex-1 py-3 bg-transparent outline-none font-bold text-nook-900 text-lg"
+                      />
+                      <div className="pr-6 font-bold text-slate-400 text-xs uppercase tracking-widest">MWK</div>
                     </div>
-                    
-                    <div className="space-y-4 relative z-10">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Base Exchange Rate (USD to MWK)</label>
-                        <div className="flex items-center space-x-4 bg-slate-50 p-2 rounded-[24px] border-2 border-transparent focus-within:border-nook-600 focus-within:bg-white transition-all">
-                            <div className="pl-6 font-bold text-slate-400 text-sm">1 USD = </div>
-                            <input 
-                                type="number" 
-                                value={exchangeRate}
-                                onChange={(e) => setExchangeRate(Number(e.target.value))}
-                                className="flex-1 py-3 bg-transparent outline-none font-bold text-nook-900 text-lg"
-                            />
-                            <div className="pr-6 font-bold text-slate-400 text-xs uppercase tracking-widest">MWK</div>
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-medium ml-2">Updates propagate instantly to the booking engine.</p>
-                        
-                        <button 
-                            onClick={handleUpdateExchangeRate}
-                            disabled={updatingRate}
-                            className="w-full py-4 bg-slate-900 text-white rounded-[20px] font-bold text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
-                        >
-                            {updatingRate ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-                            <span>Update Live Rate</span>
-                        </button>
-                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium ml-2">Updates propagate instantly to the booking engine.</p>
+
+                    <button
+                      onClick={handleUpdateExchangeRate}
+                      disabled={updatingRate}
+                      className="w-full py-4 bg-slate-900 text-white rounded-[20px] font-bold text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50 flex items-center justify-center space-x-2"
+                    >
+                      {updatingRate ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                      <span>Update Live Rate</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm flex items-center justify-between group col-span-1 lg:col-span-2">
                   <div className="flex items-center space-x-8">
-                    <div className="p-6 bg-slate-50 text-nook-600 rounded-[32px] group-hover:bg-nook-50 transition-colors"><Database size={32}/></div>
+                    <div className="p-6 bg-slate-50 text-nook-600 rounded-[32px] group-hover:bg-nook-50 transition-colors"><Database size={32} /></div>
                     <div>
                       <h3 className="text-xl font-serif font-bold text-slate-900 mb-1">Production Inventory Seed</h3>
                       <p className="text-[11px] text-slate-400 font-medium">Reset the live catalog with standard Malawian hospitality assets.</p>
                     </div>
                   </div>
-                  <button 
-                    disabled={isSeeding} 
-                    onClick={handleSeed} 
+                  <button
+                    disabled={isSeeding}
+                    onClick={handleSeed}
                     className="px-8 py-5 bg-white border-2 border-slate-100 text-nook-900 font-black uppercase tracking-widest text-[10px] rounded-[24px] hover:border-nook-600 hover:text-nook-600 transition flex items-center space-x-3 shadow-sm"
                   >
                     {isSeeding ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
@@ -380,8 +379,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                   <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight">All Listings</h3>
                   <p className="text-sm text-slate-400 font-medium mt-1">Status and management of all property units.</p>
                 </div>
-                <button 
-                  onClick={() => setConfigTarget('new')} 
+                <button
+                  onClick={() => setConfigTarget('new')}
                   className="flex items-center space-x-3 bg-slate-900 text-white px-10 py-5 rounded-[24px] text-[11px] font-black uppercase tracking-widest hover:bg-black transition shadow-2xl shadow-slate-900/20"
                 >
                   <Plus size={18} /> <span>Add New Listing</span>
@@ -404,9 +403,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     return (
                       <div key={listing.id} className="bg-white rounded-[44px] border border-slate-100 overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 group hover:-translate-y-2">
                         <div className="h-72 bg-slate-50 relative overflow-hidden cursor-pointer" onClick={() => setConfigTarget(listing)}>
-                          <img 
-                            src={activeThumb} 
-                            className="w-full h-full object-cover group-hover:scale-110 transition duration-[1500ms]" 
+                          <img
+                            src={activeThumb}
+                            className="w-full h-full object-cover group-hover:scale-110 transition duration-[1500ms]"
                             alt={listing.name}
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
@@ -443,117 +442,115 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
           {activeTab === 'bookings' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-               <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
-                  <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight mb-2">Reservations</h3>
-                  <p className="text-sm text-slate-400 font-medium">Global booking ledger.</p>
-               </div>
-               
-               <div className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm">
-                  <table className="w-full text-left">
-                     <thead className="bg-slate-50 border-b border-slate-100">
-                        <tr>
-                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Ref ID</th>
-                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Guest</th>
-                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Listing</th>
-                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Dates</th>
-                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
-                           <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total</th>
+              <div className="bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
+                <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight mb-2">Reservations</h3>
+                <p className="text-sm text-slate-400 font-medium">Global booking ledger.</p>
+              </div>
+
+              <div className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Ref ID</th>
+                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Guest</th>
+                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Listing</th>
+                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Dates</th>
+                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                      <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {bookings.map(booking => {
+                      const guest = users.find(u => u.uid === booking.userId);
+                      const listing = listings.find(l => l.id === booking.listingId);
+                      return (
+                        <tr key={booking.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-8 py-6 text-xs font-bold text-slate-500 font-mono">#{booking.id.substring(0, 6)}</td>
+                          <td className="px-8 py-6">
+                            <div className="font-bold text-slate-900 text-sm">{guest?.fullName || 'Unknown'}</div>
+                            <div className="text-[10px] text-slate-400">{guest?.email}</div>
+                          </td>
+                          <td className="px-8 py-6 text-xs font-medium text-slate-600">{listing?.name || booking.listingId}</td>
+                          <td className="px-8 py-6 text-xs text-slate-500">
+                            {new Date(booking.checkIn).toLocaleDateString()} <ArrowRight size={10} className="inline mx-1" /> {new Date(booking.checkOut).toLocaleDateString()}
+                          </td>
+                          <td className="px-8 py-6">
+                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${booking.status === BookingStatus.CONFIRMED ? 'bg-emerald-50 text-emerald-600' :
+                                booking.status === BookingStatus.PENDING ? 'bg-amber-50 text-amber-600' :
+                                  'bg-red-50 text-brand-red'
+                              }`}>
+                              {booking.status}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-right font-bold text-nook-900 text-sm">${booking.totalAmount}</td>
                         </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-50">
-                        {bookings.map(booking => {
-                           const guest = users.find(u => u.uid === booking.userId);
-                           const listing = listings.find(l => l.id === booking.listingId);
-                           return (
-                              <tr key={booking.id} className="hover:bg-slate-50/50 transition-colors">
-                                 <td className="px-8 py-6 text-xs font-bold text-slate-500 font-mono">#{booking.id.substring(0,6)}</td>
-                                 <td className="px-8 py-6">
-                                    <div className="font-bold text-slate-900 text-sm">{guest?.fullName || 'Unknown'}</div>
-                                    <div className="text-[10px] text-slate-400">{guest?.email}</div>
-                                 </td>
-                                 <td className="px-8 py-6 text-xs font-medium text-slate-600">{listing?.name || booking.listingId}</td>
-                                 <td className="px-8 py-6 text-xs text-slate-500">
-                                    {new Date(booking.checkIn).toLocaleDateString()} <ArrowRight size={10} className="inline mx-1"/> {new Date(booking.checkOut).toLocaleDateString()}
-                                 </td>
-                                 <td className="px-8 py-6">
-                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                                       booking.status === BookingStatus.CONFIRMED ? 'bg-emerald-50 text-emerald-600' :
-                                       booking.status === BookingStatus.PENDING ? 'bg-amber-50 text-amber-600' :
-                                       'bg-red-50 text-brand-red'
-                                    }`}>
-                                       {booking.status}
-                                    </span>
-                                 </td>
-                                 <td className="px-8 py-6 text-right font-bold text-nook-900 text-sm">${booking.totalAmount}</td>
-                              </tr>
-                           );
-                        })}
-                     </tbody>
-                  </table>
-                  {bookings.length === 0 && (
-                     <div className="p-12 text-center text-slate-400 text-sm italic">No records found.</div>
-                  )}
-               </div>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {bookings.length === 0 && (
+                  <div className="p-12 text-center text-slate-400 text-sm italic">No records found.</div>
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === 'guests' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-               <div className="flex justify-between items-end bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
-                  <div>
-                     <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight mb-2">User Registry</h3>
-                     <p className="text-sm text-slate-400 font-medium">Manage permissions and guest profiles.</p>
+              <div className="flex justify-between items-end bg-white p-12 rounded-[50px] border border-slate-100 shadow-sm">
+                <div>
+                  <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight mb-2">User Registry</h3>
+                  <p className="text-sm text-slate-400 font-medium">Manage permissions and guest profiles.</p>
+                </div>
+                <button
+                  onClick={() => setUserTarget('new')}
+                  className="flex items-center space-x-3 bg-nook-900 text-white px-8 py-4 rounded-[20px] text-[11px] font-black uppercase tracking-widest hover:bg-nook-800 transition shadow-lg"
+                >
+                  <Plus size={16} /> <span>Add User</span>
+                </button>
+              </div>
+
+              <div className="grid gap-6">
+                {users.map(user => (
+                  <div key={user.uid} className="bg-white p-8 rounded-[32px] border border-slate-100 flex items-center justify-between hover:border-nook-100 transition-all shadow-sm">
+                    <div className="flex items-center space-x-6">
+                      <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300">
+                        <UserIcon size={24} />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-slate-900 flex items-center space-x-3">
+                          <span>{user.fullName}</span>
+                          {user.role === UserRole.ADMIN && <ShieldCheck size={16} className="text-emerald-500" />}
+                        </h4>
+                        <div className="flex items-center space-x-4 mt-1">
+                          <div className="flex items-center space-x-1 text-slate-400 text-xs">
+                            <Mail size={12} /> <span>{user.email}</span>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${user.isSuspended ? 'bg-red-50 text-brand-red border-red-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                            }`}>
+                            {user.isSuspended ? 'Suspended' : 'Active'}
+                          </span>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-300 bg-slate-50 px-2 py-0.5 rounded">{user.role}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => setUserTarget(user)}
+                        className="w-12 h-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-nook-600 hover:border-nook-200 transition"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.uid)}
+                        className="w-12 h-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-brand-red hover:border-red-100 transition"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
-                  <button 
-                     onClick={() => setUserTarget('new')}
-                     className="flex items-center space-x-3 bg-nook-900 text-white px-8 py-4 rounded-[20px] text-[11px] font-black uppercase tracking-widest hover:bg-nook-800 transition shadow-lg"
-                  >
-                     <Plus size={16} /> <span>Add User</span>
-                  </button>
-               </div>
-               
-               <div className="grid gap-6">
-                  {users.map(user => (
-                     <div key={user.uid} className="bg-white p-8 rounded-[32px] border border-slate-100 flex items-center justify-between hover:border-nook-100 transition-all shadow-sm">
-                        <div className="flex items-center space-x-6">
-                           <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300">
-                              <UserIcon size={24} />
-                           </div>
-                           <div>
-                              <h4 className="text-lg font-bold text-slate-900 flex items-center space-x-3">
-                                 <span>{user.fullName}</span>
-                                 {user.role === UserRole.ADMIN && <ShieldCheck size={16} className="text-emerald-500" />}
-                              </h4>
-                              <div className="flex items-center space-x-4 mt-1">
-                                 <div className="flex items-center space-x-1 text-slate-400 text-xs">
-                                    <Mail size={12} /> <span>{user.email}</span>
-                                 </div>
-                                 <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${
-                                    user.isSuspended ? 'bg-red-50 text-brand-red border-red-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                                 }`}>
-                                    {user.isSuspended ? 'Suspended' : 'Active'}
-                                 </span>
-                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-300 bg-slate-50 px-2 py-0.5 rounded">{user.role}</span>
-                              </div>
-                           </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                           <button 
-                              onClick={() => setUserTarget(user)}
-                              className="w-12 h-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-nook-600 hover:border-nook-200 transition"
-                           >
-                              <Edit3 size={18} />
-                           </button>
-                           <button 
-                              onClick={() => handleDeleteUser(user.uid)}
-                              className="w-12 h-12 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-brand-red hover:border-red-100 transition"
-                           >
-                              <Trash2 size={18} />
-                           </button>
-                        </div>
-                     </div>
-                  ))}
-               </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -561,7 +558,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
       {/* Listing Config Modal */}
       {configTarget && (
-        <AssetConfigModule 
+        <AssetConfigModule
           target={configTarget === 'new' ? null : configTarget}
           onClose={() => setConfigTarget(null)}
           onComplete={async () => {
@@ -574,12 +571,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       {/* User Config Modal */}
       {userTarget && (
         <UserConfigModule
-           target={userTarget === 'new' ? null : userTarget}
-           onClose={() => setUserTarget(null)}
-           onComplete={async () => {
-              await refreshData();
-              setUserTarget(null);
-           }}
+          target={userTarget === 'new' ? null : userTarget}
+          onClose={() => setUserTarget(null)}
+          onComplete={async () => {
+            await refreshData();
+            setUserTarget(null);
+          }}
         />
       )}
     </div>
@@ -610,7 +607,7 @@ function ContentSection({ icon: Icon, title }: { icon: any, title: string }) {
 
 function InputGroup({ label, type = 'text', value, onChange, placeholder, options }: any) {
   const base = "w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all placeholder:text-slate-200";
-  
+
   return (
     <div className="space-y-4">
       <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">{label}</label>
@@ -643,97 +640,97 @@ function OperationalToggle({ label, checked, onChange }: { label: string, checke
 
 // --- NEW COMPONENT: User Config Module ---
 interface UserConfigModuleProps {
-    target: User | null;
-    onClose: () => void;
-    onComplete: () => Promise<void>;
+  target: User | null;
+  onClose: () => void;
+  onComplete: () => Promise<void>;
 }
 
 const UserConfigModule: React.FC<UserConfigModuleProps> = ({ target, onClose, onComplete }) => {
-    const [draft, setDraft] = useState<Partial<User>>(target || {
-        fullName: '',
-        email: '',
-        role: UserRole.GUEST,
-        isSuspended: false
-    });
-    const [isSaving, setIsSaving] = useState(false);
+  const [draft, setDraft] = useState<Partial<User>>(target || {
+    fullName: '',
+    email: '',
+    role: UserRole.GUEST,
+    isSuspended: false
+  });
+  const [isSaving, setIsSaving] = useState(false);
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            if (target) {
-                // Update
-                if (!draft.uid) throw new Error("Invalid User ID");
-                await db.updateUser(draft as User);
-            } else {
-                // Create
-                await db.createManualProfile(draft);
-            }
-            await onComplete();
-        } catch (e: any) {
-            alert("Operation failed: " + e.message);
-        } finally {
-            setIsSaving(false);
-        }
-    };
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      if (target) {
+        // Update
+        if (!draft.uid) throw new Error("Invalid User ID");
+        await db.updateUser(draft as User);
+      } else {
+        // Create
+        await db.createManualProfile(draft);
+      }
+      await onComplete();
+    } catch (e: any) {
+      alert("Operation failed: " + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-            <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 border border-white/20">
-                <div className="flex justify-between items-start mb-8">
-                   <div>
-                      <h3 className="text-2xl font-serif font-bold text-nook-900 mb-1">{target ? 'Edit Profile' : 'New User'}</h3>
-                      <p className="text-slate-400 text-sm">{target ? 'Modify existing permissions.' : 'Create a manual profile record.'}</p>
-                   </div>
-                   <button onClick={onClose} className="p-3 bg-slate-50 rounded-full hover:bg-slate-100 transition"><X size={20} className="text-slate-400" /></button>
-                </div>
-
-                <div className="space-y-6">
-                    <InputGroup 
-                        label="Full Name" 
-                        value={draft.fullName} 
-                        onChange={(v: string) => setDraft({...draft, fullName: v})} 
-                        placeholder="John Doe" 
-                    />
-                    <InputGroup 
-                        label="Email Address" 
-                        value={draft.email} 
-                        onChange={(v: string) => setDraft({...draft, email: v})} 
-                        placeholder="john@example.com" 
-                    />
-                    
-                    <div className="grid grid-cols-2 gap-6">
-                        <InputGroup 
-                            label="System Role" 
-                            type="select" 
-                            options={Object.values(UserRole)} 
-                            value={draft.role} 
-                            onChange={(v: string) => setDraft({...draft, role: v as UserRole})} 
-                        />
-                        <div className="pt-2">
-                            <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold block mb-4">Account Status</label>
-                            <OperationalToggle 
-                                label="Suspension" 
-                                checked={!!draft.isSuspended} 
-                                onChange={(v) => setDraft({...draft, isSuspended: v})} 
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="mt-10 flex space-x-4">
-                    <button onClick={onClose} className="flex-1 py-4 bg-slate-50 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-2xl hover:bg-slate-100 transition">Cancel</button>
-                    <button 
-                        onClick={handleSave} 
-                        disabled={isSaving || !draft.fullName}
-                        className="flex-[2] py-4 bg-nook-900 text-white font-bold uppercase text-[10px] tracking-widest rounded-2xl hover:bg-nook-800 transition disabled:opacity-50 flex items-center justify-center space-x-2 shadow-lg shadow-nook-900/20"
-                    >
-                        {isSaving && <Loader2 size={14} className="animate-spin" />}
-                        <span>{target ? 'Update Profile' : 'Create User'}</span>
-                    </button>
-                </div>
-            </div>
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+      <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 border border-white/20">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h3 className="text-2xl font-serif font-bold text-nook-900 mb-1">{target ? 'Edit Profile' : 'New User'}</h3>
+            <p className="text-slate-400 text-sm">{target ? 'Modify existing permissions.' : 'Create a manual profile record.'}</p>
+          </div>
+          <button onClick={onClose} className="p-3 bg-slate-50 rounded-full hover:bg-slate-100 transition"><X size={20} className="text-slate-400" /></button>
         </div>
-    );
+
+        <div className="space-y-6">
+          <InputGroup
+            label="Full Name"
+            value={draft.fullName}
+            onChange={(v: string) => setDraft({ ...draft, fullName: v })}
+            placeholder="John Doe"
+          />
+          <InputGroup
+            label="Email Address"
+            value={draft.email}
+            onChange={(v: string) => setDraft({ ...draft, email: v })}
+            placeholder="john@example.com"
+          />
+
+          <div className="grid grid-cols-2 gap-6">
+            <InputGroup
+              label="System Role"
+              type="select"
+              options={Object.values(UserRole)}
+              value={draft.role}
+              onChange={(v: string) => setDraft({ ...draft, role: v as UserRole })}
+            />
+            <div className="pt-2">
+              <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold block mb-4">Account Status</label>
+              <OperationalToggle
+                label="Suspension"
+                checked={!!draft.isSuspended}
+                onChange={(v) => setDraft({ ...draft, isSuspended: v })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10 flex space-x-4">
+          <button onClick={onClose} className="flex-1 py-4 bg-slate-50 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-2xl hover:bg-slate-100 transition">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !draft.fullName}
+            className="flex-[2] py-4 bg-nook-900 text-white font-bold uppercase text-[10px] tracking-widest rounded-2xl hover:bg-nook-800 transition disabled:opacity-50 flex items-center justify-center space-x-2 shadow-lg shadow-nook-900/20"
+          >
+            {isSaving && <Loader2 size={14} className="animate-spin" />}
+            <span>{target ? 'Update Profile' : 'Create User'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ... Helper Components (AssetConfigModule, StatCard, etc) remain unchanged ...
@@ -801,12 +798,12 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Act as a luxury hospitality copywriter. Generate a compelling, high-end ${field === 'shortSummary' ? 'one-sentence summary' : 'multiline description'} for a property named "${draft.name}" which is a "${draft.type}". Focus on elegance, comfort, and the Malawian sanctuary vibe. Keep it professional.`;
-      
+
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt
       });
-      
+
       const refinedText = response.text?.trim() || "";
       if (refinedText) {
         setDraft(prev => ({ ...prev, [field]: refinedText }));
@@ -827,7 +824,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `A professional, ultra-luxury high-resolution architectural photograph of a "${draft.name}" which is a ${draft.type} at an upscale Malawian resort. Cinematic lighting, minimalist modern interior with high-quality wood and stone materials. 4k, photorealistic, elegant.`;
-      
+
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: prompt }] },
@@ -896,20 +893,20 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
       for (const originalFile of files) {
         // Compress and resize before uploading
         const file = await compressImage(originalFile);
-        
+
         const ext = 'jpg';
         const fileName = `asset-${Math.random().toString(36).substring(7)}.${ext}`;
         const filePath = `${safeDir}/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file, { 
+        const { error: uploadError } = await supabase.storage.from('listing-images').upload(filePath, file, {
           contentType: 'image/jpeg',
           cacheControl: '3600'
         });
         if (uploadError) throw uploadError;
 
-        uploadedAssets.push({ 
-          path: filePath, 
-          url: db.resolveImageUrl(filePath), 
+        uploadedAssets.push({
+          path: filePath,
+          url: db.resolveImageUrl(filePath),
           caption: '',
           isAiGenerated: false
         });
@@ -963,14 +960,13 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
 
           <div className="flex-1 space-y-4">
             {menu.map(item => (
-              <button 
-                key={item.id} 
+              <button
+                key={item.id}
                 onClick={() => setActiveTab(item.id as any)}
-                className={`w-full flex items-center space-x-5 p-5 rounded-[28px] transition-all text-left group ${
-                  activeTab === item.id 
-                    ? 'bg-nook-900 text-white shadow-2xl shadow-nook-900/20 translate-x-2' 
+                className={`w-full flex items-center space-x-5 p-5 rounded-[28px] transition-all text-left group ${activeTab === item.id
+                    ? 'bg-nook-900 text-white shadow-2xl shadow-nook-900/20 translate-x-2'
                     : 'text-slate-400 hover:bg-white hover:text-nook-900 hover:shadow-sm'
-                }`}
+                  }`}
               >
                 <div className={`p-3 rounded-2xl transition-colors ${activeTab === item.id ? 'bg-white/10' : 'bg-slate-50 group-hover:bg-nook-50'}`}>
                   <item.icon size={20} />
@@ -995,8 +991,8 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
               <h4 className="text-4xl font-serif text-slate-900 font-bold tracking-tight capitalize">{activeTab} Details</h4>
               <p className="text-sm text-slate-400 font-medium mt-1">Configure unit parameters for live production cataloging.</p>
             </div>
-            <button 
-              onClick={onClose} 
+            <button
+              onClick={onClose}
               className="w-14 h-14 bg-slate-50 text-slate-300 rounded-[20px] flex items-center justify-center hover:bg-red-50 hover:text-brand-red transition-all hover:rotate-90"
             >
               <X size={28} />
@@ -1008,15 +1004,15 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
                 <ContentSection icon={Sparkles} title="Location" />
                 <div className="grid md:grid-cols-2 gap-10">
-                  <InputGroup label="Unit Display Name" value={draft.name} onChange={v => setDraft({...draft, name: v})} placeholder="The Ivory Oasis Penthouse" />
-                  <InputGroup label="Asset Category" type="select" options={['house', 'room', 'apartment', 'studio']} value={draft.type} onChange={v => setDraft({...draft, type: v as ListingType})} />
+                  <InputGroup label="Unit Display Name" value={draft.name} onChange={v => setDraft({ ...draft, name: v })} placeholder="The Ivory Oasis Penthouse" />
+                  <InputGroup label="Asset Category" type="select" options={['Entire House', 'Room']} value={draft.type} onChange={v => setDraft({ ...draft, type: v as ListingType })} />
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="flex justify-between items-center pr-3">
                     <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">Marketing Summary</label>
-                    <button 
-                      onClick={() => handleAiRefineText('shortSummary')} 
+                    <button
+                      onClick={() => handleAiRefineText('shortSummary')}
                       disabled={isAiGenerating}
                       className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition disabled:opacity-50"
                     >
@@ -1024,14 +1020,14 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
                       <span>Refine with AI</span>
                     </button>
                   </div>
-                  <input className="w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all" value={draft.shortSummary} onChange={e => setDraft({...draft, shortSummary: e.target.value})} placeholder="A magnificent 4-bedroom escape..." />
+                  <input className="w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all" value={draft.shortSummary} onChange={e => setDraft({ ...draft, shortSummary: e.target.value })} placeholder="A magnificent 4-bedroom escape..." />
                 </div>
 
                 <div className="space-y-4">
                   <div className="flex justify-between items-center pr-3">
                     <label className="text-[10px] font-black uppercase text-slate-300 tracking-[0.2em] ml-3 font-bold">Extended Description</label>
-                    <button 
-                      onClick={() => handleAiRefineText('description')} 
+                    <button
+                      onClick={() => handleAiRefineText('description')}
                       disabled={isAiGenerating}
                       className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-nook-600 hover:text-nook-800 transition disabled:opacity-50"
                     >
@@ -1039,70 +1035,70 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
                       <span>Compose with AI</span>
                     </button>
                   </div>
-                  <textarea rows={5} className="w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all resize-none leading-relaxed" value={draft.description} onChange={e => setDraft({...draft, description: e.target.value})} placeholder="Detail the luxury elements..." />
+                  <textarea rows={5} className="w-full px-10 py-6 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[32px] outline-none font-bold text-nook-900 transition-all resize-none leading-relaxed" value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} placeholder="Detail the luxury elements..." />
                 </div>
-                
+
                 <ContentSection icon={Settings} title="Architecture Specs" />
                 <div className="grid grid-cols-4 gap-8">
-                  <InputGroup label="Bedrooms" type="number" value={draft.bedrooms} onChange={v => setDraft({...draft, bedrooms: Number(v)})} />
-                  <InputGroup label="Bathrooms" type="number" value={draft.bathrooms} onChange={v => setDraft({...draft, bathrooms: Number(v)})} />
-                  <InputGroup label="Max Guests" type="number" value={draft.maxGuests} onChange={v => setDraft({...draft, maxGuests: Number(v)})} />
-                  <InputGroup label="Min Stay" type="number" value={draft.minStay} onChange={v => setDraft({...draft, minStay: Number(v)})} />
+                  <InputGroup label="Bedrooms" type="number" value={draft.bedrooms} onChange={v => setDraft({ ...draft, bedrooms: Number(v) })} />
+                  <InputGroup label="Bathrooms" type="number" value={draft.bathrooms} onChange={v => setDraft({ ...draft, bathrooms: Number(v) })} />
+                  <InputGroup label="Max Guests" type="number" value={draft.maxGuests} onChange={v => setDraft({ ...draft, maxGuests: Number(v) })} />
+                  <InputGroup label="Min Stay" type="number" value={draft.minStay} onChange={v => setDraft({ ...draft, minStay: Number(v) })} />
                 </div>
 
                 <ContentSection icon={ListChecks} title="Amenities & Features" />
                 <div className="bg-slate-50 p-8 rounded-[40px] border border-slate-100 space-y-6">
-                   {(!draft.amenities || draft.amenities.length === 0) && (
-                      <p className="text-sm text-slate-400 italic font-medium text-center py-4">No amenities listed yet. Add features like 'WiFi', 'Pool', etc.</p>
-                   )}
-                   <div className="flex flex-wrap gap-3">
-                      {(draft.amenities || []).map((amenity, i) => (
-                        <span key={i} className="pl-4 pr-2 py-2 bg-white rounded-xl text-xs font-bold text-nook-900 shadow-sm flex items-center space-x-2 border border-slate-100 group animate-in zoom-in duration-300">
-                          <span>{amenity}</span>
-                          <button 
-                            onClick={() => {
-                              const newAmenities = [...(draft.amenities || [])];
-                              newAmenities.splice(i, 1);
-                              setDraft({...draft, amenities: newAmenities});
-                            }} 
-                            className="p-1 rounded-full text-slate-300 hover:bg-red-50 hover:text-brand-red transition-colors"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
-                   </div>
-                   <div className="flex items-center space-x-3">
-                      <input 
-                        type="text" 
-                        placeholder="Add a new feature (e.g. 'Ocean View')..." 
-                        className="flex-1 px-6 py-4 bg-white border-2 border-slate-100 focus:border-nook-600 rounded-[24px] outline-none text-sm font-bold text-nook-900 transition-all placeholder:text-slate-300"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const input = e.currentTarget;
-                            const val = input.value.trim();
-                            if (val && !(draft.amenities || []).includes(val)) {
-                              setDraft({...draft, amenities: [...(draft.amenities || []), val]});
-                              input.value = '';
-                            }
-                          }
-                        }}
-                        id="amenity-input"
-                      />
-                      <button 
-                        onClick={() => {
-                          const input = document.getElementById('amenity-input') as HTMLInputElement;
+                  {(!draft.amenities || draft.amenities.length === 0) && (
+                    <p className="text-sm text-slate-400 italic font-medium text-center py-4">No amenities listed yet. Add features like 'WiFi', 'Pool', etc.</p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {(draft.amenities || []).map((amenity, i) => (
+                      <span key={i} className="pl-4 pr-2 py-2 bg-white rounded-xl text-xs font-bold text-nook-900 shadow-sm flex items-center space-x-2 border border-slate-100 group animate-in zoom-in duration-300">
+                        <span>{amenity}</span>
+                        <button
+                          onClick={() => {
+                            const newAmenities = [...(draft.amenities || [])];
+                            newAmenities.splice(i, 1);
+                            setDraft({ ...draft, amenities: newAmenities });
+                          }}
+                          className="p-1 rounded-full text-slate-300 hover:bg-red-50 hover:text-brand-red transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="text"
+                      placeholder="Add a new feature (e.g. 'Ocean View')..."
+                      className="flex-1 px-6 py-4 bg-white border-2 border-slate-100 focus:border-nook-600 rounded-[24px] outline-none text-sm font-bold text-nook-900 transition-all placeholder:text-slate-300"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const input = e.currentTarget;
                           const val = input.value.trim();
                           if (val && !(draft.amenities || []).includes(val)) {
-                            setDraft({...draft, amenities: [...(draft.amenities || []), val]});
+                            setDraft({ ...draft, amenities: [...(draft.amenities || []), val] });
                             input.value = '';
                           }
-                        }}
-                        className="px-6 py-4 bg-nook-900 text-white rounded-[24px] font-bold text-xs uppercase tracking-widest hover:bg-nook-800 transition shadow-lg hover:shadow-xl active:scale-95"
-                      >
-                        <Plus size={18} />
-                      </button>
-                   </div>
+                        }
+                      }}
+                      id="amenity-input"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('amenity-input') as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val && !(draft.amenities || []).includes(val)) {
+                          setDraft({ ...draft, amenities: [...(draft.amenities || []), val] });
+                          input.value = '';
+                        }
+                      }}
+                      className="px-6 py-4 bg-nook-900 text-white rounded-[24px] font-bold text-xs uppercase tracking-widest hover:bg-nook-800 transition shadow-lg hover:shadow-xl active:scale-95"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1111,7 +1107,7 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
                 <div className="flex justify-between items-center">
                   <ContentSection icon={ImageIcon} title="Production Asset Gallery" />
-                  <button 
+                  <button
                     onClick={handleAiGenerateImage}
                     disabled={isAiGenerating}
                     className="flex items-center space-x-3 bg-gradient-to-r from-nook-600 to-nook-900 text-white px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:scale-105 transition shadow-xl shadow-nook-900/20 disabled:opacity-50"
@@ -1120,14 +1116,14 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
                     <span>Magic AI Generator</span>
                   </button>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   {(draft.images || []).map((img, idx) => (
                     <div key={`${idx}-${img.url}`} className={`group relative aspect-video rounded-[40px] overflow-hidden bg-slate-50 border-4 transition-all duration-500 ${idx === 0 ? 'border-nook-600 ring-[12px] ring-nook-50/50 shadow-2xl' : 'border-slate-50 hover:border-nook-200'}`}>
-                      <img 
-                        src={img.url || FALLBACK_IMAGE} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition duration-[1500ms]" 
-                        alt="" 
+                      <img
+                        src={img.url || FALLBACK_IMAGE}
+                        className="w-full h-full object-cover group-hover:scale-110 transition duration-[1500ms]"
+                        alt=""
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
                         }}
@@ -1145,13 +1141,13 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
                           <button onClick={() => {
                             const reorder = [...(draft.images || [])];
                             const [move] = reorder.splice(idx, 1);
-                            reorder.unshift(move); 
-                            setDraft(prev => ({...prev, images: reorder}));
+                            reorder.unshift(move);
+                            setDraft(prev => ({ ...prev, images: reorder }));
                           }} className="p-4 bg-white text-nook-900 rounded-[20px] hover:scale-110 transition shadow-2xl" title="Set as Primary Thumbnail">
                             <Star size={20} className="fill-current text-nook-600" />
                           </button>
                         )}
-                        <button onClick={() => setDraft(prev => ({...prev, images: (prev.images || []).filter((_, i) => i !== idx)}))} className="p-4 bg-white text-brand-red rounded-[20px] hover:scale-110 transition shadow-2xl" title="Delete Asset">
+                        <button onClick={() => setDraft(prev => ({ ...prev, images: (prev.images || []).filter((_, i) => i !== idx) }))} className="p-4 bg-white text-brand-red rounded-[20px] hover:scale-110 transition shadow-2xl" title="Delete Asset">
                           <Trash2 size={20} />
                         </button>
                       </div>
@@ -1181,8 +1177,8 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
                 <ContentSection icon={DollarSign} title="Commercial Strategy" />
                 <div className="grid md:grid-cols-2 gap-10">
-                  <InputGroup label="Base Nightly Rate (USD)" type="number" value={draft.price} onChange={v => setDraft({...draft, price: Number(v)})} />
-                  <InputGroup label="Mandatory Cleaning Fee" type="number" value={draft.cleaningFee} onChange={v => setDraft({...draft, cleaningFee: Number(v)})} />
+                  <InputGroup label="Base Nightly Rate (USD)" type="number" value={draft.price} onChange={v => setDraft({ ...draft, price: Number(v) })} />
+                  <InputGroup label="Mandatory Cleaning Fee" type="number" value={draft.cleaningFee} onChange={v => setDraft({ ...draft, cleaningFee: Number(v) })} />
                 </div>
               </div>
             )}
@@ -1191,9 +1187,9 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
                 <ContentSection icon={ShieldAlert} title="Unit Guidelines" />
                 <div className="bg-[#FBFBFE] p-12 rounded-[50px] grid md:grid-cols-3 gap-10 border border-slate-100 shadow-sm">
-                   <OperationalToggle label="Smoking Protocol" checked={draft.houseRules.smokingAllowed} onChange={v => setDraft({...draft, houseRules: {...draft.houseRules, smokingAllowed: v}})} />
-                   <OperationalToggle label="Pet Policy" checked={draft.houseRules.petsAllowed} onChange={v => setDraft({...draft, houseRules: {...draft.houseRules, petsAllowed: v}})} />
-                   <OperationalToggle label="Event Authorization" checked={draft.houseRules.eventsAllowed} onChange={v => setDraft({...draft, houseRules: {...draft.houseRules, eventsAllowed: v}})} />
+                  <OperationalToggle label="Smoking Protocol" checked={draft.houseRules.smokingAllowed} onChange={v => setDraft({ ...draft, houseRules: { ...draft.houseRules, smokingAllowed: v } })} />
+                  <OperationalToggle label="Pet Policy" checked={draft.houseRules.petsAllowed} onChange={v => setDraft({ ...draft, houseRules: { ...draft.houseRules, petsAllowed: v } })} />
+                  <OperationalToggle label="Event Authorization" checked={draft.houseRules.eventsAllowed} onChange={v => setDraft({ ...draft, houseRules: { ...draft.houseRules, eventsAllowed: v } })} />
                 </div>
               </div>
             )}
@@ -1201,15 +1197,15 @@ const AssetConfigModule: React.FC<AssetConfigModuleProps> = ({ target, onClose, 
             {activeTab === 'host' && (
               <div className="space-y-12 animate-in fade-in slide-in-from-bottom-6 duration-700">
                 <ContentSection icon={UserIcon} title="Host Attribution" />
-                <InputGroup label="Sanctuary Welcome Guide" type="textarea" value={draft.guestExperience.welcomeGuide} onChange={v => setDraft({...draft, guestExperience: {...draft.guestExperience, welcomeGuide: v}})} placeholder="Compose a world-class welcome message..." />
+                <InputGroup label="Sanctuary Welcome Guide" type="textarea" value={draft.guestExperience.welcomeGuide} onChange={v => setDraft({ ...draft, guestExperience: { ...draft.guestExperience, welcomeGuide: v } })} placeholder="Compose a world-class welcome message..." />
               </div>
             )}
           </div>
 
           <footer className="p-12 border-t border-slate-50 bg-white/80 backdrop-blur-xl flex space-x-8 sticky bottom-0 z-20">
             <button onClick={onClose} className="flex-1 py-6 bg-white border border-slate-200 text-slate-400 font-black uppercase text-[11px] tracking-[0.3em] rounded-[30px] hover:bg-slate-50 transition shadow-sm font-bold">Discard Changes</button>
-            <button 
-              onClick={handlePersist} 
+            <button
+              onClick={handlePersist}
               disabled={isSaving}
               className="flex-[2] py-6 bg-nook-900 text-white font-black uppercase text-[11px] tracking-[0.3em] rounded-[30px] hover:bg-nook-800 transition shadow-[0_25px_50px_-12px_rgba(23,177,105,0.4)] flex items-center justify-center space-x-4 disabled:opacity-50 disabled:cursor-wait group font-bold"
             >
