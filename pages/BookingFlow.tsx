@@ -14,7 +14,7 @@ interface BookingFlowProps {
 
 const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete, onCancel }) => {
   const [listing, setListing] = useState<Listing | null>(null);
-  
+
   // Mutable Date State
   const [checkInDate, setCheckInDate] = useState(bookingData.checkIn);
   const [checkOutDate, setCheckOutDate] = useState(bookingData.checkOut);
@@ -25,10 +25,10 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const [paymentStep, setPaymentStep] = useState<'summary' | 'method' | 'processing'>('summary');
   const [userBookings, setUserBookings] = useState<Booking[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+
   // Currency Logic
   const [currency, setCurrency] = useState<'USD' | 'MWK'>('USD');
-  const [exchangeRate, setExchangeRate] = useState<number>(1750); 
+  const [exchangeRate, setExchangeRate] = useState<number>(1750);
 
   // Contact State
   const [phone, setPhone] = useState('');
@@ -48,7 +48,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         db.getBookings(),
         db.getExchangeRate()
       ]);
-      
+
       // Only filter bookings if user is logged in to calculate tier
       if (user) {
         const filteredBookings = allBookings.filter(b => b.userId === user.uid);
@@ -56,7 +56,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       } else {
         setUserBookings([]);
       }
-      
+
       setExchangeRate(rate);
 
       const match = allListings.find(l => l.id === bookingData.listingId);
@@ -83,7 +83,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
         setIsCheckingAvailability(false);
       }
     };
-    
+
     // Debounce slightly to avoid spamming DB on rapid typing
     const timeout = setTimeout(check, 500);
     return () => clearTimeout(timeout);
@@ -96,7 +96,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
     const start = new Date(checkInDate);
     const end = new Date(checkOutDate);
     const nights = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (nights <= 0) return 0;
 
     const subtotal = nights * listing.price;
@@ -113,11 +113,11 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
   const handleCheckInChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
     setCheckInDate(newDate);
-    
+
     if (new Date(newDate) >= new Date(checkOutDate)) {
-        const nextDay = new Date(newDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        setCheckOutDate(nextDay.toISOString().split('T')[0]);
+      const nextDay = new Date(newDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      setCheckOutDate(nextDay.toISOString().split('T')[0]);
     }
   };
 
@@ -132,8 +132,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
     // --- Validation ---
     if (new Date(checkInDate) >= new Date(checkOutDate)) {
-        setErrorMessage("Invalid dates selected. Check-out must be after check-in.");
-        return;
+      setErrorMessage("Invalid dates selected. Check-out must be after check-in.");
+      return;
     }
     if (isAvailable === false) {
       setErrorMessage("The selected dates are no longer available.");
@@ -146,18 +146,18 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
     // Guest Auth Validation
     if (!user) {
-        if (!guestEmail || !guestPassword) {
-            setErrorMessage("Please complete all sign-in fields.");
-            return;
-        }
-        if (!isGuestLoginMode && !guestName) {
-            setErrorMessage("Please enter your full name.");
-            return;
-        }
+      if (!guestEmail || !guestPassword) {
+        setErrorMessage("Please complete all sign-in fields.");
+        return;
+      }
+      if (!isGuestLoginMode && !guestName) {
+        setErrorMessage("Please enter your full name.");
+        return;
+      }
     }
 
     setPaymentStep('processing');
-    
+
     try {
       if (!listing) throw new Error("Listing data missing.");
 
@@ -168,43 +168,43 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
       if (!activeUserId) {
         if (isGuestLoginMode) {
-             // LOG IN EXISTING USER
-             const { data, error } = await supabase.auth.signInWithPassword({
-                 email: guestEmail,
-                 password: guestPassword
-             });
-             if (error) throw error;
-             if (!data.user) throw new Error("Login failed.");
-             
-             activeUserId = data.user.id;
-             activeUserEmail = data.user.email || guestEmail;
-             
-             // Fetch name from profile
-             const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', activeUserId).single();
-             activeUserName = profile?.full_name || 'Guest';
+          // LOG IN EXISTING USER
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: guestEmail,
+            password: guestPassword
+          });
+          if (error) throw error;
+          if (!data.user) throw new Error("Login failed.");
+
+          activeUserId = data.user.id;
+          activeUserEmail = data.user.email || guestEmail;
+
+          // Fetch name from profile
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', activeUserId).single();
+          activeUserName = profile?.full_name || 'Guest';
 
         } else {
-             // SIGN UP NEW USER
-             const { data, error } = await supabase.auth.signUp({
-                 email: guestEmail,
-                 password: guestPassword,
-                 options: { data: { full_name: guestName } }
-             });
-             if (error) throw error;
-             if (!data.user) throw new Error("Signup failed.");
+          // SIGN UP NEW USER
+          const { data, error } = await supabase.auth.signUp({
+            email: guestEmail,
+            password: guestPassword,
+            options: { data: { full_name: guestName } }
+          });
+          if (error) throw error;
+          if (!data.user) throw new Error("Signup failed.");
 
-             activeUserId = data.user.id;
-             activeUserEmail = guestEmail;
-             activeUserName = guestName;
+          activeUserId = data.user.id;
+          activeUserEmail = guestEmail;
+          activeUserName = guestName;
 
-             // Manually create profile ensuring it exists before booking
-             const { error: profileError } = await supabase.from('profiles').insert({
-                 id: activeUserId,
-                 full_name: guestName,
-                 role: UserRole.GUEST,
-                 email: guestEmail
-             });
-             if (profileError) console.error("Profile creation warning:", profileError);
+          // Manually create profile ensuring it exists before booking
+          const { error: profileError } = await supabase.from('profiles').insert({
+            id: activeUserId,
+            full_name: guestName,
+            role: UserRole.GUEST,
+            email: guestEmail
+          });
+          if (profileError) console.error("Profile creation warning:", profileError);
         }
       }
 
@@ -235,6 +235,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
       // --- 4. Invoke Payment Gateway ---
       const { data, error: invokeError } = await supabase.functions.invoke('paychangu-checkout', {
+        headers: {
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZmxxeXlodG10cXhoc3phdHVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMTkzMzcsImV4cCI6MjA4Mzc5NTMzN30.15OMq6lC6Pkd3qUYEK14dXgKsnjczS2QCB4UIaZP_-s`,
+        },
         body: {
           amount: chargeAmount,
           currency: currency,
@@ -254,7 +257,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       if (data?.error) {
         throw new Error(data.error);
       }
-      
+
       const checkoutUrl = data?.checkout_url || data?.data?.checkout_url;
 
       if (checkoutUrl) {
@@ -281,7 +284,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
       {/* Sidebar: Summary & Branding */}
       <div className="md:w-2/5 bg-nook-900 text-white p-8 md:p-16 flex flex-col justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-        
+
         <button onClick={onCancel} className="text-white/60 hover:text-white flex items-center space-x-2 text-sm transition self-start group z-10">
           <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> <span>Abort & return</span>
         </button>
@@ -292,28 +295,28 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
 
           <div className="bg-white/10 border border-white/20 rounded-[40px] p-10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
             {isCheckingAvailability && (
-               <div className="absolute top-0 right-0 p-4">
-                 <Loader2 size={16} className="animate-spin text-white/50" />
-               </div>
+              <div className="absolute top-0 right-0 p-4">
+                <Loader2 size={16} className="animate-spin text-white/50" />
+              </div>
             )}
-            
+
             <div className="flex justify-between items-start mb-10 pb-6 border-b border-white/10">
-               <div>
-                  <div className="text-xl font-bold text-white mb-1">{listing.name}</div>
-                  <div className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">{listing.type}</div>
-               </div>
-               <div className="text-right">
-                  <div className="text-2xl font-bold text-emerald-400">${listing.price}</div>
-               </div>
+              <div>
+                <div className="text-xl font-bold text-white mb-1">{listing.name}</div>
+                <div className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">{listing.type}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-emerald-400">${listing.price}</div>
+              </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-8 mb-10">
               <div className="relative group">
                 <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest flex items-center space-x-1">
                   <CalendarIcon size={10} /> <span>Check In</span>
                 </div>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={checkInDate}
                   min={new Date().toISOString().split('T')[0]}
                   onChange={handleCheckInChange}
@@ -322,10 +325,10 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               </div>
               <div className="relative group">
                 <div className="text-[10px] uppercase font-black text-white/30 mb-2 tracking-widest flex items-center space-x-1">
-                   <CalendarIcon size={10} /> <span>Check Out</span>
+                  <CalendarIcon size={10} /> <span>Check Out</span>
                 </div>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={checkOutDate}
                   min={checkInDate}
                   onChange={handleCheckOutChange}
@@ -338,18 +341,18 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               <span className="text-sm font-sans font-bold text-white/40 uppercase tracking-[0.2em]">Total</span>
               <div className="flex flex-col items-end">
                 <div className="flex items-baseline space-x-2">
-                    <span className="text-lg font-bold text-emerald-400 opacity-80">{currency === 'USD' ? '$' : 'MK'}</span>
-                    <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
+                  <span className="text-lg font-bold text-emerald-400 opacity-80">{currency === 'USD' ? '$' : 'MK'}</span>
+                  <span className={`font-bold tracking-tight transition-opacity ${isCheckingAvailability ? 'opacity-50' : 'opacity-100'}`}>
                     {getDisplayAmount().toLocaleString()}
-                    </span>
+                  </span>
                 </div>
                 {isAvailable === false && !isCheckingAvailability && (
                   <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest bg-red-500/20 px-2 py-1 rounded mt-1">Dates Unavailable</span>
                 )}
                 {currency === 'MWK' && (
-                    <span className="text-[9px] text-white/40 font-bold mt-1 tracking-widest uppercase">
-                        Rate: 1 USD = {exchangeRate} MWK
-                    </span>
+                  <span className="text-[9px] text-white/40 font-bold mt-1 tracking-widest uppercase">
+                    Rate: 1 USD = {exchangeRate} MWK
+                  </span>
                 )}
               </div>
             </div>
@@ -380,37 +383,36 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                 </div>
                 <h3 className="text-4xl font-serif text-nook-900 mb-4 tracking-tight">Stay Validated</h3>
                 <p className="text-slate-500 text-base font-medium leading-relaxed">
-                   {user 
-                     ? `Welcome back, ${user.fullName.split(' ')[0]}. Ready to secure your booking.`
-                     : "Ready to secure your booking via our partner, PayChangu."
-                   }
+                  {user
+                    ? `Welcome back, ${user.fullName.split(' ')[0]}. Ready to secure your booking.`
+                    : "Ready to secure your booking via our partner, PayChangu."
+                  }
                 </p>
               </div>
 
               {/* Currency Toggle */}
               <div className="bg-slate-50 p-2 rounded-full flex border border-slate-100 shadow-inner">
-                 <button 
-                    onClick={() => setCurrency('USD')}
-                    className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'USD' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
-                 >
-                    USD Payment
-                 </button>
-                 <button 
-                    onClick={() => setCurrency('MWK')}
-                    className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'MWK' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
-                 >
-                    Local MWK
-                 </button>
+                <button
+                  onClick={() => setCurrency('USD')}
+                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'USD' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                >
+                  USD Payment
+                </button>
+                <button
+                  onClick={() => setCurrency('MWK')}
+                  className={`flex-1 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${currency === 'MWK' ? 'bg-white text-nook-900 shadow-md transform scale-100' : 'text-slate-400 hover:text-nook-900'}`}
+                >
+                  Local MWK
+                </button>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => setPaymentStep('method')}
                 disabled={isAvailable === false}
-                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${
-                  isAvailable === false 
+                className={`w-full py-6 rounded-[24px] font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center space-x-4 shadow-2xl group ${isAvailable === false
                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     : 'bg-nook-900 text-white hover:bg-nook-800'
-                }`}
+                  }`}
               >
                 <span>{isAvailable === false ? 'Select Different Dates' : `Proceed to ${user ? 'Checkout' : 'Guest Details'}`}</span>
                 {isAvailable !== false && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
@@ -422,77 +424,77 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
             <div className="space-y-10 animate-in fade-in">
               <div className="text-center">
                 <h3 className="text-3xl font-serif text-nook-900 mb-2 tracking-tight">
-                    {user ? 'Final Details' : (isGuestLoginMode ? 'Member Login' : 'Guest Registration')}
+                  {user ? 'Final Details' : (isGuestLoginMode ? 'Member Login' : 'Guest Registration')}
                 </h3>
                 <p className="text-slate-400 text-sm font-medium">
-                    {user 
-                        ? 'Confirm your contact info for the payment gateway.' 
-                        : (isGuestLoginMode 
-                            ? 'Log in to access your member tier discounts.' 
-                            : 'Create a profile to secure your reservation and track your stay.')
-                    }
+                  {user
+                    ? 'Confirm your contact info for the payment gateway.'
+                    : (isGuestLoginMode
+                      ? 'Log in to access your member tier discounts.'
+                      : 'Create a profile to secure your reservation and track your stay.')
+                  }
                 </p>
               </div>
 
               <div className="space-y-5">
                 {/* --- Guest Auth Fields (Only if not logged in) --- */}
                 {!user && (
-                    <div className="space-y-4 p-6 bg-white border border-slate-100 rounded-[32px] shadow-sm">
-                        
-                        {!isGuestLoginMode && (
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Full Name</label>
-                                <div className="relative">
-                                    <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                    <input 
-                                        type="text" 
-                                        value={guestName}
-                                        onChange={(e) => setGuestName(e.target.value)}
-                                        placeholder="John Doe"
-                                        className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[24px] text-sm font-bold text-nook-900 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
-                        )}
+                  <div className="space-y-4 p-6 bg-white border border-slate-100 rounded-[32px] shadow-sm">
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Email Address</label>
-                            <div className="relative">
-                                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                <input 
-                                    type="email" 
-                                    value={guestEmail}
-                                    onChange={(e) => setGuestEmail(e.target.value)}
-                                    placeholder="name@example.com"
-                                    className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[24px] text-sm font-bold text-nook-900 outline-none transition-all"
-                                />
-                            </div>
+                    {!isGuestLoginMode && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Full Name</label>
+                        <div className="relative">
+                          <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                          <input
+                            type="text"
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            placeholder="John Doe"
+                            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[24px] text-sm font-bold text-nook-900 outline-none transition-all"
+                          />
                         </div>
+                      </div>
+                    )}
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                <input 
-                                    type={showPassword ? "text" : "password"}
-                                    value={guestPassword}
-                                    onChange={(e) => setGuestPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full pl-14 pr-14 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[24px] text-sm font-bold text-nook-900 outline-none transition-all"
-                                />
-                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-nook-600"><Eye size={18}/></button>
-                            </div>
-                        </div>
-
-                        <div className="pt-2 text-center">
-                            <button 
-                                onClick={() => { setIsGuestLoginMode(!isGuestLoginMode); setErrorMessage(null); }}
-                                className="text-[10px] uppercase font-bold tracking-widest text-nook-600 hover:text-nook-800 transition-colors"
-                            >
-                                {isGuestLoginMode ? "Need an account? Sign Up" : "Already have an account? Log In"}
-                            </button>
-                        </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Email Address</label>
+                      <div className="relative">
+                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        <input
+                          type="email"
+                          value={guestEmail}
+                          onChange={(e) => setGuestEmail(e.target.value)}
+                          placeholder="name@example.com"
+                          className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[24px] text-sm font-bold text-nook-900 outline-none transition-all"
+                        />
+                      </div>
                     </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={guestPassword}
+                          onChange={(e) => setGuestPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full pl-14 pr-14 py-4 bg-slate-50 border-2 border-transparent focus:border-nook-600 focus:bg-white rounded-[24px] text-sm font-bold text-nook-900 outline-none transition-all"
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-nook-600"><Eye size={18} /></button>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 text-center">
+                      <button
+                        onClick={() => { setIsGuestLoginMode(!isGuestLoginMode); setErrorMessage(null); }}
+                        className="text-[10px] uppercase font-bold tracking-widest text-nook-600 hover:text-nook-800 transition-colors"
+                      >
+                        {isGuestLoginMode ? "Need an account? Sign Up" : "Already have an account? Log In"}
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* --- Phone Number (Always Required) --- */}
@@ -500,8 +502,8 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
                   <label className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.2em] ml-2">Mobile Payment Number</label>
                   <div className="relative">
                     <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+265..."
@@ -512,13 +514,13 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               </div>
 
               <div className="p-5 bg-slate-50 rounded-[28px] text-center border border-slate-100">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Total Charge</span>
-                  <div className="text-2xl font-black text-nook-900">
-                    {currency === 'USD' ? '$' : 'MK'} {getDisplayAmount().toLocaleString()}
-                  </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1">Total Charge</span>
+                <div className="text-2xl font-black text-nook-900">
+                  {currency === 'USD' ? '$' : 'MK'} {getDisplayAmount().toLocaleString()}
+                </div>
               </div>
 
-              <button 
+              <button
                 onClick={handlePay}
                 className="w-full py-6 bg-nook-900 text-white rounded-[28px] font-black uppercase tracking-[0.2em] text-[12px] hover:bg-nook-800 transition-all shadow-2xl flex items-center justify-center space-x-4"
               >
@@ -539,10 +541,10 @@ const BookingFlow: React.FC<BookingFlowProps> = ({ user, bookingData, onComplete
               </div>
               <div className="space-y-4">
                 <h3 className="text-3xl font-serif text-nook-900 tracking-tight">
-                    {user ? 'Connecting Gateway' : 'Creating Profile'}
+                  {user ? 'Connecting Gateway' : 'Creating Profile'}
                 </h3>
                 <p className="text-slate-400 text-base font-medium leading-relaxed max-w-[280px] mx-auto">
-                    {user ? "You will be redirected to PayChangu's secure platform in a moment." : "Securing your account and initiating payment..."}
+                  {user ? "You will be redirected to PayChangu's secure platform in a moment." : "Securing your account and initiating payment..."}
                 </p>
               </div>
             </div>
