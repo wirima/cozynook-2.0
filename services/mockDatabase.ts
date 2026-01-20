@@ -56,8 +56,8 @@ class DatabaseService {
       }
 
       if (!data || data.length === 0) return [];
-      
-      return data.map(l => ({
+
+      const mapped = data.map(l => ({
         id: String(l.id),
         name: String(l.name),
         type: l.type as ListingType,
@@ -81,6 +81,17 @@ class DatabaseService {
         hostInfo: this.parseJsonField<HostInfo>(l.host_info, {} as HostInfo),
         guestExperience: this.parseJsonField<GuestExperience>(l.guest_experience, {} as GuestExperience)
       } as Listing));
+
+      const TARGET_NAME = 'entire 4 bedroom luxury house';
+      mapped.sort((a, b) => {
+        const aMatch = a.name.toLowerCase() === TARGET_NAME;
+        const bMatch = b.name.toLowerCase() === TARGET_NAME;
+        if (aMatch && !bMatch) return -1;
+        if (!aMatch && bMatch) return 1;
+        return 0;
+      });
+
+      return mapped;
     } catch (err) {
       console.error("Critical production listing fetch failure:", err);
       return [];

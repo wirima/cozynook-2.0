@@ -105,8 +105,8 @@ class DatabaseService {
       }
 
       if (!data || data.length === 0) return [];
-      
-      return data.map(l => {
+
+      const mapped = data.map(l => {
         const rawImages = this.parseJsonField<ListingImage[]>(l.images, []);
         // Resolve paths to URLs for the UI
         const resolvedImages = rawImages.map(img => ({
@@ -140,6 +140,18 @@ class DatabaseService {
           guestExperience: this.parseJsonField<GuestExperience>(l.guest_experience, {} as GuestExperience)
         } as Listing;
       });
+
+      // Ensure the flagship house always appears first for all consumers (Landing, Dashboards, etc.)
+      const TARGET_NAME = 'entire 4 bedroom luxury house';
+      mapped.sort((a, b) => {
+        const aMatch = a.name.toLowerCase() === TARGET_NAME;
+        const bMatch = b.name.toLowerCase() === TARGET_NAME;
+        if (aMatch && !bMatch) return -1;
+        if (!aMatch && bMatch) return 1;
+        return 0;
+      });
+
+      return mapped;
     } catch (err) {
       console.error("Critical production listing fetch failure:", err);
       return [];
