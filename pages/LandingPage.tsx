@@ -534,9 +534,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
       {/* Footer */}
       <footer className="bg-white border-t border-slate-100 text-slate-500 py-16 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[11px] uppercase tracking-[0.2em]">
-          <div>© 2025 The Cozy Nook Production System.</div>
+          <div>© 2026 The Cozy Nook.</div>
           <div className="mt-4 md:mt-0 space-x-8">
-            <a href="#" className="hover:text-nook-600 transition">Privacy Protocols</a>
+            <a href="#" className="hover:text-nook-600 transition">Privacy</a>
             <a href="#" className="hover:text-nook-600 transition">Service Terms</a>
           </div>
         </div>
