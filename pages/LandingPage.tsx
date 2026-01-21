@@ -9,21 +9,23 @@ interface LandingPageProps {
   onBook: (id: string, dates: { checkIn: string, checkOut: string }) => void;
   onLogin: () => void;
   onGuestPortal: () => void;
+  onViewTerms: () => void;
+  onViewPrivacy: () => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGuestPortal }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGuestPortal, onViewTerms, onViewPrivacy }) => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, boolean>>({});
   const [heroImageUrl, setHeroImageUrl] = useState<string>(DEFAULT_HERO);
-  
+
   // State for modals
   const [activeGallery, setActiveGallery] = useState<{ listing: Listing, index: number } | null>(null);
   const [expandedListing, setExpandedListing] = useState<Listing | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [dates, setDates] = useState({ 
-    checkIn: new Date().toISOString().split('T')[0], 
-    checkOut: new Date(Date.now() + 86400000).toISOString().split('T')[0] 
+  const [dates, setDates] = useState({
+    checkIn: new Date().toISOString().split('T')[0],
+    checkOut: new Date(Date.now() + 86400000).toISOString().split('T')[0]
   });
 
   useEffect(() => {
@@ -79,11 +81,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
   const handleCheckInChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newCheckIn = e.target.value;
     if (!newCheckIn) return;
-    
+
     setDates(prev => {
       const inDate = new Date(newCheckIn);
       const outDate = new Date(prev.checkOut);
-      
+
       if (inDate >= outDate) {
         const nextDay = new Date(inDate);
         nextDay.setDate(nextDay.getDate() + 1);
@@ -103,14 +105,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
     setDates(prev => {
       const inDate = new Date(prev.checkIn);
       const outDate = new Date(newCheckOut);
-      
+
       if (outDate <= inDate) {
-         const prevDay = new Date(outDate);
-         prevDay.setDate(prevDay.getDate() - 1);
-         return {
-            checkIn: prevDay.toISOString().split('T')[0],
-            checkOut: newCheckOut
-         };
+        const prevDay = new Date(outDate);
+        prevDay.setDate(prevDay.getDate() - 1);
+        return {
+          checkIn: prevDay.toISOString().split('T')[0],
+          checkOut: newCheckOut
+        };
       }
       return { ...prev, checkOut: newCheckOut };
     });
@@ -134,8 +136,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
       {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center text-white pt-16">
         <div className="absolute inset-0">
-          <img 
-            src={heroImageUrl || DEFAULT_HERO} 
+          <img
+            src={heroImageUrl || DEFAULT_HERO}
             key={heroImageUrl}
             className="w-full h-full object-cover brightness-[0.65]"
             alt="Hero"
@@ -156,8 +158,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
               <Calendar className="text-brand-red" size={20} />
               <div className="flex-1">
                 <label className="block text-[9px] uppercase tracking-[0.2em] text-slate-400 font-black mb-0.5">Check In</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   className="w-full bg-transparent text-nook-900 focus:outline-none cursor-pointer text-sm font-bold [color-scheme:light]"
                   value={dates.checkIn}
                   min={new Date().toISOString().split('T')[0]}
@@ -171,8 +173,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
               <Calendar className="text-brand-red" size={20} />
               <div className="flex-1">
                 <label className="block text-[9px] uppercase tracking-[0.2em] text-slate-400 font-black mb-0.5">Check Out</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   className="w-full bg-transparent text-nook-900 focus:outline-none cursor-pointer text-sm font-bold [color-scheme:light]"
                   value={dates.checkOut}
                   min={dates.checkIn}
@@ -183,7 +185,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
 
             {/* Action Button */}
             <div className="w-full md:w-auto">
-              <button 
+              <button
                 onClick={scrollToRooms}
                 className="bg-brand-red text-white w-full px-12 py-5 rounded-full font-black uppercase tracking-widest text-xs hover:bg-red-600 transition flex items-center justify-center space-x-3 shadow-xl"
               >
@@ -219,20 +221,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
               {listings.map((listing) => {
                 const isAvailable = availabilityMap[listing.id] !== false;
                 // Robust primary image selection
-                const mainImage = (listing.images && listing.images.length > 0 && listing.images[0].url && listing.images[0].url.trim().length > 0) 
-                  ? listing.images[0].url 
+                const mainImage = (listing.images && listing.images.length > 0 && listing.images[0].url && listing.images[0].url.trim().length > 0)
+                  ? listing.images[0].url
                   : FALLBACK_IMAGE;
-                
+
                 return (
                   <div key={listing.id} className={`group bg-white rounded-[40px] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-slate-100 flex flex-col`}>
                     {/* Image Section - Clicking opens Gallery */}
-                    <div 
-                      className="relative h-80 overflow-hidden cursor-pointer bg-nook-50" 
+                    <div
+                      className="relative h-80 overflow-hidden cursor-pointer bg-nook-50"
                       onClick={() => setActiveGallery({ listing, index: 0 })}
                     >
-                      <img 
-                        src={mainImage} 
-                        alt={listing.name} 
+                      <img
+                        src={mainImage}
+                        alt={listing.name}
                         className="w-full h-full object-cover group-hover:scale-110 transition duration-[2000ms]"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
@@ -241,9 +243,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                       <div className="absolute top-6 right-6 bg-white/95 backdrop-blur-xl px-4 py-2 rounded-2xl text-xs font-bold text-nook-900 shadow-sm border border-slate-100 z-10">
                         ${listing.price}<span className="text-[10px] text-slate-400 ml-1">/ NIGHT</span>
                       </div>
-                      
+
                       {!isAvailable && (
-                        <div 
+                        <div
                           className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center p-6 text-center z-20 animate-in fade-in duration-500"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -266,7 +268,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                     </div>
 
                     {/* Details Section - Clicking opens Expanded View */}
-                    <div 
+                    <div
                       className="p-10 flex flex-col flex-1 cursor-pointer hover:bg-slate-50/50 transition-colors"
                       onClick={() => setExpandedListing(listing)}
                     >
@@ -281,13 +283,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                       <p className="text-slate-500 text-sm leading-relaxed mb-8 h-10 overflow-hidden line-clamp-2">
                         {listing.shortSummary || listing.description}
                       </p>
-                      
+
                       <div className="mt-auto space-y-6">
                         <div className="text-nook-600 font-bold text-xs uppercase tracking-widest flex items-center space-x-2 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-300">
-                           <span>View Full Details</span> <ArrowRight size={14} />
+                          <span>View Full Details</span> <ArrowRight size={14} />
                         </div>
 
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation(); // Don't open details modal
                             if (isAvailable) {
@@ -296,11 +298,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                               scrollToTop();
                             }
                           }}
-                          className={`w-full py-5 rounded-2xl font-bold uppercase tracking-widest text-xs transition flex items-center justify-center space-x-3 ${
-                            isAvailable 
-                              ? 'bg-nook-900 text-white hover:bg-nook-800 shadow-xl shadow-nook-900/20 hover:shadow-2xl' 
+                          className={`w-full py-5 rounded-2xl font-bold uppercase tracking-widest text-xs transition flex items-center justify-center space-x-3 ${isAvailable
+                              ? 'bg-nook-900 text-white hover:bg-nook-800 shadow-xl shadow-nook-900/20 hover:shadow-2xl'
                               : 'bg-white text-nook-900 border-2 border-nook-100 hover:bg-nook-50 cursor-pointer shadow-sm hover:shadow-md'
-                          }`}
+                            }`}
                         >
                           {isAvailable ? (
                             <span>Book Now</span>
@@ -324,132 +325,131 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
       {/* Expanded Listing Details Modal */}
       {expandedListing && (
         <div className="fixed inset-0 z-[100] bg-nook-900/40 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setExpandedListing(null)}>
-          <div 
-            className="bg-white w-full max-w-4xl h-[90vh] rounded-[40px] shadow-2xl flex flex-col relative overflow-hidden" 
+          <div
+            className="bg-white w-full max-w-4xl h-[90vh] rounded-[40px] shadow-2xl flex flex-col relative overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header / Hero */}
             <div className="h-64 relative shrink-0">
-               <img 
-                 src={expandedListing.images[0]?.url || FALLBACK_IMAGE} 
-                 className="w-full h-full object-cover" 
-                 alt={expandedListing.name}
-               />
-               <button 
-                 onClick={() => setExpandedListing(null)} 
-                 className="absolute top-6 right-6 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-nook-900 transition-all border border-white/20 z-10"
-               >
-                 <X size={20} />
-               </button>
-               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 pt-20">
-                 <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2">{expandedListing.type}</div>
-                 <h2 className="text-3xl font-serif font-bold text-white">{expandedListing.name}</h2>
-               </div>
+              <img
+                src={expandedListing.images[0]?.url || FALLBACK_IMAGE}
+                className="w-full h-full object-cover"
+                alt={expandedListing.name}
+              />
+              <button
+                onClick={() => setExpandedListing(null)}
+                className="absolute top-6 right-6 w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-nook-900 transition-all border border-white/20 z-10"
+              >
+                <X size={20} />
+              </button>
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-8 pt-20">
+                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2">{expandedListing.type}</div>
+                <h2 className="text-3xl font-serif font-bold text-white">{expandedListing.name}</h2>
+              </div>
             </div>
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-               <div className="space-y-10">
-                 {/* Description */}
-                 <div>
-                   <h3 className="text-xl font-serif font-bold text-nook-900 mb-4">About this space</h3>
-                   <p className="text-slate-500 leading-relaxed text-sm whitespace-pre-wrap">{expandedListing.description || expandedListing.shortSummary}</p>
-                 </div>
+              <div className="space-y-10">
+                {/* Description */}
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-nook-900 mb-4">About this space</h3>
+                  <p className="text-slate-500 leading-relaxed text-sm whitespace-pre-wrap">{expandedListing.description || expandedListing.shortSummary}</p>
+                </div>
 
-                 {/* Amenities */}
-                 {expandedListing.amenities && expandedListing.amenities.length > 0 && (
-                   <div>
-                     <h3 className="text-xl font-serif font-bold text-nook-900 mb-6">What this place offers</h3>
-                     <div className="grid grid-cols-2 gap-4">
-                        {expandedListing.amenities.map((amenity, i) => (
-                           <div key={i} className="flex items-center space-x-3 text-slate-600 bg-slate-50 p-3 rounded-xl">
-                              <Check size={16} className="text-nook-600" />
-                              <span className="text-sm font-medium">{amenity}</span>
-                           </div>
-                        ))}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* House Rules & Host - Grid */}
-                 <div className="grid md:grid-cols-2 gap-8 pt-4 border-t border-slate-100">
-                    <div>
-                       <h3 className="text-lg font-serif font-bold text-nook-900 mb-4 flex items-center space-x-2">
-                         <Info size={18} /> <span>House Rules</span>
-                       </h3>
-                       <div className="space-y-3">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-slate-400 font-medium">Check-in</span>
-                            <span className="text-nook-900 font-bold">{expandedListing.checkInTime}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-slate-400 font-medium">Check-out</span>
-                            <span className="text-nook-900 font-bold">{expandedListing.checkOutTime}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-slate-400 font-medium">Quiet Hours</span>
-                            <span className="text-nook-900 font-bold">{expandedListing.houseRules?.quietHoursStart} - {expandedListing.houseRules?.quietHoursEnd}</span>
-                          </div>
-                          {expandedListing.houseRules?.additionalNotes && (
-                            <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-xl mt-2 leading-relaxed">
-                               {expandedListing.houseRules.additionalNotes}
-                            </div>
-                          )}
-                       </div>
+                {/* Amenities */}
+                {expandedListing.amenities && expandedListing.amenities.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-serif font-bold text-nook-900 mb-6">What this place offers</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {expandedListing.amenities.map((amenity, i) => (
+                        <div key={i} className="flex items-center space-x-3 text-slate-600 bg-slate-50 p-3 rounded-xl">
+                          <Check size={16} className="text-nook-600" />
+                          <span className="text-sm font-medium">{amenity}</span>
+                        </div>
+                      ))}
                     </div>
+                  </div>
+                )}
 
-                    <div>
-                       <h3 className="text-lg font-serif font-bold text-nook-900 mb-4 flex items-center space-x-2">
-                         <UserIcon size={18} /> <span>Hosted By</span>
-                       </h3>
-                       <div className="flex items-center space-x-4 mb-4">
-                          <div className="w-12 h-12 bg-nook-100 rounded-full flex items-center justify-center text-nook-600 font-bold text-lg overflow-hidden">
-                             {expandedListing.hostInfo?.avatarUrl ? (
-                               <img src={expandedListing.hostInfo.avatarUrl} className="w-full h-full object-cover" alt="Host" />
-                             ) : (
-                               expandedListing.hostInfo?.displayName?.[0] || 'C'
-                             )}
-                          </div>
-                          <div>
-                             <div className="font-bold text-nook-900">{expandedListing.hostInfo?.displayName || 'The Cozy Nook'}</div>
-                             <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                               {expandedListing.hostInfo?.verified ? 'Verified Host' : 'Host'}
-                             </div>
-                          </div>
-                       </div>
-                       <div className="text-xs text-slate-500 space-y-1">
-                          <p>Response time: <span className="font-bold">{expandedListing.hostInfo?.responseTime || 'Within an hour'}</span></p>
-                          <p>Languages: <span className="font-bold">{(expandedListing.hostInfo?.languages || ['English']).join(', ')}</span></p>
-                       </div>
+                {/* House Rules & Host - Grid */}
+                <div className="grid md:grid-cols-2 gap-8 pt-4 border-t border-slate-100">
+                  <div>
+                    <h3 className="text-lg font-serif font-bold text-nook-900 mb-4 flex items-center space-x-2">
+                      <Info size={18} /> <span>House Rules</span>
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400 font-medium">Check-in</span>
+                        <span className="text-nook-900 font-bold">{expandedListing.checkInTime}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400 font-medium">Check-out</span>
+                        <span className="text-nook-900 font-bold">{expandedListing.checkOutTime}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-400 font-medium">Quiet Hours</span>
+                        <span className="text-nook-900 font-bold">{expandedListing.houseRules?.quietHoursStart} - {expandedListing.houseRules?.quietHoursEnd}</span>
+                      </div>
+                      {expandedListing.houseRules?.additionalNotes && (
+                        <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-xl mt-2 leading-relaxed">
+                          {expandedListing.houseRules.additionalNotes}
+                        </div>
+                      )}
                     </div>
-                 </div>
-               </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-serif font-bold text-nook-900 mb-4 flex items-center space-x-2">
+                      <UserIcon size={18} /> <span>Hosted By</span>
+                    </h3>
+                    <div className="flex items-center space-x-4 mb-4">
+                      <div className="w-12 h-12 bg-nook-100 rounded-full flex items-center justify-center text-nook-600 font-bold text-lg overflow-hidden">
+                        {expandedListing.hostInfo?.avatarUrl ? (
+                          <img src={expandedListing.hostInfo.avatarUrl} className="w-full h-full object-cover" alt="Host" />
+                        ) : (
+                          expandedListing.hostInfo?.displayName?.[0] || 'C'
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-nook-900">{expandedListing.hostInfo?.displayName || 'The Cozy Nook'}</div>
+                        <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                          {expandedListing.hostInfo?.verified ? 'Verified Host' : 'Host'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p>Response time: <span className="font-bold">{expandedListing.hostInfo?.responseTime || 'Within an hour'}</span></p>
+                      <p>Languages: <span className="font-bold">{(expandedListing.hostInfo?.languages || ['English']).join(', ')}</span></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Sticky Footer */}
             <div className="p-6 border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-between shrink-0">
-               <div>
-                  <div className="text-xl font-bold text-nook-900">${expandedListing.price}</div>
-                  <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Per Night</div>
-               </div>
-               <button 
-                  onClick={() => {
-                    const isAvailable = availabilityMap[expandedListing.id] !== false;
-                    setExpandedListing(null); // Close modal
-                    if (isAvailable) {
-                      onBook(expandedListing.id, dates);
-                    } else {
-                      scrollToTop();
-                    }
-                  }}
-                  className={`px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition shadow-xl ${
-                    availabilityMap[expandedListing.id] !== false
+              <div>
+                <div className="text-xl font-bold text-nook-900">${expandedListing.price}</div>
+                <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Per Night</div>
+              </div>
+              <button
+                onClick={() => {
+                  const isAvailable = availabilityMap[expandedListing.id] !== false;
+                  setExpandedListing(null); // Close modal
+                  if (isAvailable) {
+                    onBook(expandedListing.id, dates);
+                  } else {
+                    scrollToTop();
+                  }
+                }}
+                className={`px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition shadow-xl ${availabilityMap[expandedListing.id] !== false
                     ? 'bg-nook-900 text-white hover:bg-nook-800'
                     : 'bg-white text-nook-900 border-2 border-nook-100'
                   }`}
-               >
-                 {availabilityMap[expandedListing.id] !== false ? 'Book Now' : 'Check Calendar'}
-               </button>
+              >
+                {availabilityMap[expandedListing.id] !== false ? 'Book Now' : 'Check Calendar'}
+              </button>
             </div>
           </div>
         </div>
@@ -461,11 +461,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
           <button onClick={() => setActiveGallery(null)} className="absolute top-8 right-8 text-white/60 hover:text-white transition-all hover:rotate-90 z-[110]">
             <X size={32} />
           </button>
-          
+
           <div className="relative w-full max-w-6xl aspect-[16/9] flex items-center justify-center group" onClick={(e) => e.stopPropagation()}>
             {activeGallery.listing.images.length > 1 && (
               <>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     const newIndex = (activeGallery.index - 1 + activeGallery.listing.images.length) % activeGallery.listing.images.length;
@@ -475,7 +475,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                 >
                   <ChevronLeft size={24} />
                 </button>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     const newIndex = (activeGallery.index + 1) % activeGallery.listing.images.length;
@@ -489,8 +489,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
             )}
 
             <div className="w-full h-full rounded-[40px] overflow-hidden border border-white/10 shadow-2xl relative bg-black/20">
-              <img 
-                src={activeGallery.listing.images[activeGallery.index]?.url || FALLBACK_IMAGE} 
+              <img
+                src={activeGallery.listing.images[activeGallery.index]?.url || FALLBACK_IMAGE}
                 className="w-full h-full object-cover animate-in fade-in zoom-in-95 duration-500"
                 alt={`Photo ${activeGallery.index + 1}`}
                 onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK_IMAGE; }}
@@ -504,9 +504,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                     <div className="text-lg font-bold">{activeGallery.listing.images[activeGallery.index].caption}</div>
                   )}
                 </div>
-                
+
                 <div className="pointer-events-auto">
-                  <button 
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       const isAvailable = availabilityMap[activeGallery.listing.id] !== false;
@@ -516,11 +516,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
                       }
                     }}
                     disabled={availabilityMap[activeGallery.listing.id] === false}
-                    className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition flex items-center justify-center space-x-3 shadow-2xl ${
-                      availabilityMap[activeGallery.listing.id] !== false
-                        ? 'bg-brand-red text-white hover:bg-red-600 active:scale-95' 
+                    className={`px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs transition flex items-center justify-center space-x-3 shadow-2xl ${availabilityMap[activeGallery.listing.id] !== false
+                        ? 'bg-brand-red text-white hover:bg-red-600 active:scale-95'
                         : 'bg-white/10 text-white/40 cursor-not-allowed border border-white/5'
-                    }`}
+                      }`}
                   >
                     <span>{availabilityMap[activeGallery.listing.id] !== false ? 'Book Now' : 'Check Calendar'}</span>
                   </button>
@@ -536,8 +535,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-[11px] uppercase tracking-[0.2em]">
           <div>© 2026 The Cozy Nook.</div>
           <div className="mt-4 md:mt-0 space-x-8">
-            <a href="#" className="hover:text-nook-600 transition">Privacy</a>
-            <a href="#" className="hover:text-nook-600 transition">Service Terms</a>
+            <button onClick={onViewPrivacy} className="hover:text-nook-600 transition">Privacy Policy</button>
+            <button onClick={onViewTerms} className="hover:text-nook-600 transition">Terms & Conditions</button>
           </div>
         </div>
       </footer>

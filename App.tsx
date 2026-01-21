@@ -6,15 +6,17 @@ import AdminDashboard from './pages/AdminDashboard';
 import GuestDashboard from './pages/GuestDashboard';
 import BookingFlow from './pages/BookingFlow';
 import PaymentResult from './pages/PaymentResult';
+import TermsAndConditions from './pages/TermsAndConditions';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import AuthModal from './components/AuthModal';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [view, setView] = useState<'landing' | 'admin' | 'guest' | 'booking' | 'payment-success' | 'payment-fail' | 'verify-payment'>('landing');
+  const [view, setView] = useState<'landing' | 'admin' | 'guest' | 'booking' | 'payment-success' | 'payment-fail' | 'verify-payment' | 'terms' | 'privacy'>('landing');
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  
+
   // For payment verification
   const [verifyingBookingId, setVerifyingBookingId] = useState<string | null>(null);
 
@@ -41,7 +43,7 @@ const App: React.FC = () => {
 
         // 2. Auth Session Check
         const { data, error } = await supabase.auth.getSession();
-        
+
         if (error) {
           console.warn("Auth initialization error:", error.message);
           if (error.message.includes("Refresh Token")) {
@@ -101,7 +103,7 @@ const App: React.FC = () => {
         isFirstLogin: isFirstTime,
         isSuspended: profile?.is_suspended || false
       };
-      
+
       setCurrentUser(user);
 
       if (isFirstTime) {
@@ -110,7 +112,7 @@ const App: React.FC = () => {
           .update({ has_logged_in_before: true })
           .eq('id', session.user.id);
       }
-      
+
       // Routing Logic (Only override if we aren't already verifying a payment)
       if (view !== 'verify-payment') {
         if (user.role === UserRole.ADMIN && view === 'landing') {
@@ -165,12 +167,22 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen">
       {view === 'landing' && (
-        <LandingPage 
+        <LandingPage
           user={currentUser}
-          onBook={startBooking} 
+          onBook={startBooking}
           onLogin={handleMainAction}
           onGuestPortal={() => currentUser ? setView('guest') : openAuth('login')}
+          onViewTerms={() => setView('terms')}
+          onViewPrivacy={() => setView('privacy')}
         />
+      )}
+
+      {view === 'terms' && (
+        <TermsAndConditions onBack={() => setView('landing')} />
+      )}
+
+      {view === 'privacy' && (
+        <PrivacyPolicy onBack={() => setView('landing')} />
       )}
 
       {view === 'admin' && currentUser?.role === UserRole.ADMIN && (
@@ -178,18 +190,18 @@ const App: React.FC = () => {
       )}
 
       {view === 'guest' && currentUser && (
-        <GuestDashboard 
-          user={currentUser} 
-          onLogout={logout} 
-          onHome={() => setView('landing')} 
+        <GuestDashboard
+          user={currentUser}
+          onLogout={logout}
+          onHome={() => setView('landing')}
           onAdmin={() => setView('admin')}
         />
       )}
 
       {view === 'booking' && pendingBooking && (
-        <BookingFlow 
+        <BookingFlow
           user={currentUser} // Can be null now
-          bookingData={pendingBooking} 
+          bookingData={pendingBooking}
           onComplete={(success) => {
             setView(success ? 'payment-success' : 'payment-fail');
             setPendingBooking(null);
@@ -203,9 +215,9 @@ const App: React.FC = () => {
 
       {/* New Verification View */}
       {view === 'verify-payment' && verifyingBookingId && (
-        <PaymentResult 
-          bookingId={verifyingBookingId} 
-          onContinue={() => setView(currentUser ? 'guest' : 'landing')} 
+        <PaymentResult
+          bookingId={verifyingBookingId}
+          onContinue={() => setView(currentUser ? 'guest' : 'landing')}
         />
       )}
 
@@ -218,10 +230,10 @@ const App: React.FC = () => {
         <PaymentResult success={false} onContinue={() => setView('landing')} />
       )}
 
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
+      <AuthModal
+        isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={() => {}} 
+        onSuccess={() => { }}
         initialMode={authMode}
       />
     </div>
