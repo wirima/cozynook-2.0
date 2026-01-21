@@ -14,7 +14,7 @@ const TermsAndConditions: React.FC<TermsAndConditionsProps> = ({ onBack }) => {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <nav className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center">
-        <button 
+        <button
           onClick={onBack}
           className="mr-4 p-2 rounded-full hover:bg-slate-100 transition text-slate-600"
         >
@@ -26,7 +26,7 @@ const TermsAndConditions: React.FC<TermsAndConditionsProps> = ({ onBack }) => {
       <div className="pt-24 pb-16 px-6 max-w-4xl mx-auto">
         <div className="prose prose-slate max-w-none">
           <h1 className="text-3xl font-serif font-bold mb-8 text-slate-900">Terms & Conditions</h1>
-          
+
           <div className="space-y-8 text-slate-600 leading-relaxed">
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">1. Introduction</h2>
@@ -79,7 +79,7 @@ const TermsAndConditions: React.FC<TermsAndConditionsProps> = ({ onBack }) => {
 
             <section>
               <h2 className="text-xl font-bold text-slate-900 mb-3">7. Liability & “Stay at Your Own Risk” Clause</h2>
-              <p className="mb-2">The Green Nook takes reasonable steps to ensure guest safety, but:</p>
+              <p className="mb-2">The Cozy Nook takes reasonable steps to ensure guest safety, but:</p>
               <ul className="list-disc pl-5 space-y-2">
                 <li>Guests stay at the property at their own risk.</li>
                 <li>The Cozy Nook is not liable for accidents, injuries, loss, theft, or damage to personal belongings.</li>
