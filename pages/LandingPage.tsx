@@ -202,7 +202,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
           <div className="flex justify-between items-end mb-16">
             <div>
               <h2 className="text-4xl font-serif text-nook-900 mb-2">Our Listings</h2>
-              <p className="text-slate-500">Luxury Home & Rooms. Local Payments Accepted</p>
+              <p className="text-slate-500">Luxury Home & Rooms</p>
             </div>
           </div>
 
