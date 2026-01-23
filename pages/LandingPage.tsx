@@ -1,4 +1,4 @@
-"import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../services/mainDatabase';
 import { Listing, User } from '../types';
 import { Shield, MapPin, Star, XCircle, Loader2, Calendar, ChevronLeft, ChevronRight, X, Image as ImageIcon, LayoutGrid, Maximize2, ArrowDown, Search, Check, Clock, User as UserIcon, Info, ArrowRight, Zap, Coffee, Wifi } from 'lucide-react';
@@ -202,7 +202,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ user, onBook, onLogin, onGues
           <div className="flex justify-between items-end mb-16">
             <div>
               <h2 className="text-4xl font-serif text-nook-900 mb-2">Our Listings</h2>
-              <p className="text-slate-500">Luxury Home & Rooms</p>
+              <p className="text-slate-500">Luxury Home & Rooms. Local Currency Accepted!</p>
             </div>
           </div>
 
